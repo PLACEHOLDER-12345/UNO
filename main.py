@@ -1,5 +1,10 @@
 import pygame, sys
+
 import drawing
+import comms
+import game
+import uno_mechanics
+
 from pygame.locals import *
 
 # Initialize Pygame
@@ -9,16 +14,16 @@ pygame.init()
 screen = pygame.display.set_mode((drawing.WIDTH, drawing.HEIGHT))
 pygame.display.set_caption('Pygame Boilerplate')
 
-drawing.GAME_SCREEN = screen
-
 # Set up the clock for managing the frame rate
-fps = 60
-fpsClock = pygame.time.Clock()
+FPS = 60
+GAME_CLOCK = pygame.time.Clock()
 
 # Main game loop
 while True:
+    events = pygame.event.get()
+
     # Handle events
-    for event in pygame.event.get():
+    for event in events:
         if event.type == QUIT:
             pygame.quit()
             sys.exit()
@@ -26,11 +31,11 @@ while True:
     # Update game state
 
     # Draw
-    drawing.draw_main_menu(screen)
+    drawing.draw_main_menu(screen, events)
     drawing.draw_grid(screen)
 
     # Flip the display to show the new frame
     pygame.display.flip()
 
     # Cap the frame rate
-    fpsClock.tick(fps)
+    GAME_CLOCK.tick(FPS)

@@ -1,0 +1,1 @@
+# This file involves mechanics for the UNO game, including card management and game rules.
