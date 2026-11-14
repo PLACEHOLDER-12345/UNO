@@ -1,5 +1,7 @@
 # This file contains helpers to draw elements on the screen.
 
+import other
+
 import pygame
 import game
 
@@ -69,9 +71,19 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     button_3.check_click(events)  
 
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
+    # load the image for the "YOUR TURN" arrow & resize it.
+    your_turn = pygame.image.load(other.resource_path("assets\\YOUR_TURN.png")).convert_alpha()
+    your_turn = pygame.transform.scale(your_turn, (160, 120))
+
+    # a formula to rotate the image to point at the turn of whoever's turn it is.
+    your_turn = pygame.transform.rotate(your_turn, 90 - (game.game_state["current_turn"] * 90))
+
+    # the YOUR TURN arrow
+
     screen.fill(SCREEN_BG)
 
-    pass # TODO
+    # reminder to accomodate a max of 4 players only.
+    screen.blit(your_turn, (300, 225))
 
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.currently_playing: draw_game_screen(screen, events)
