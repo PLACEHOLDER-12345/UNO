@@ -161,7 +161,9 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
                          onclick = lambda: print("Draw Card button clicked!"))
 
     play_button.draw(screen)
+    play_button.check_click(events)
     draw_button.draw(screen)
+    draw_button.check_click(events)
 
     # CHECK FOR WINNER
     if game.game_state["winner"] is not None: draw_win_screen(screen, events)
