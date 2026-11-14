@@ -70,6 +70,10 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     button_2.check_click(events)  
     button_3.check_click(events)  
 
+def draw_win_screen(screen:pygame.Surface, events: list[pygame.event.Event]):
+    # a supplement to draw_game_screen that is also there on a win.
+    pass
+
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.fill(SCREEN_BG)
 
@@ -173,6 +177,9 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
 
     play_button.draw(screen)
     draw_button.draw(screen)
+
+    # CHECK FOR WINNER
+    if game.game_state["winner"] is not None: draw_win_screen(screen, events)
 
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.currently_playing: draw_game_screen(screen, events)

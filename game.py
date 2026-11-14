@@ -12,16 +12,38 @@ currently_playing = False # whether the game is currently starting
 
 game_state = {
     "player_data": [], # list of player objects
+    "winner": None, # the player object of the winner
     "current_turn": 0, # index of the player whose turn it is
 
     "top_card": None, # card on top of the discard pile
 }
+
+def take_turn(player: Player):
+    pass
+
+def check_for_winner() -> Player | None: # check if any player has won the game
+    for player in game_state["player_data"]:
+        if len(player.hand) == 0:
+            game_state["winner"] = player
+            return player # return the winning player
+    return None # no winner yet
+
+def main_loop():
+    for player in game_state["player_data"]: 
+        take_turn(player)
+        if check_for_winner() is not None: break # check if any player has won the game
 
 def start_CPU_game(): # start a game against CPU players
     print("Starting CPU game.")
 
     global currently_playing
     currently_playing = True
+
+    # reset game state
+
+    game_state["player_data"] = []
+    game_state["current_turn"] = 0
+    game_state["top_card"] = None
 
     # deal cards to players
 
