@@ -165,6 +165,15 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         name_text.text_surf = pygame.transform.rotate(name_text.text_surf, rotation)
         name_text.draw(screen)
 
+    # STEP 6: DRAW THE "PLAY CARD" AND "DRAW CARD" BUTTONS
+    play_button = Button(100, 500, 100, 33, "Play Card", font_size = 18,
+                         onclick = lambda: print("Play Card button clicked!"))
+    draw_button = Button(100, 450, 100, 33, "Draw Card", font_size = 18,
+                         onclick = lambda: print("Draw Card button clicked!"))
+
+    play_button.draw(screen)
+    draw_button.draw(screen)
+
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.currently_playing: draw_game_screen(screen, events)
     else: draw_main_menu(screen, events)

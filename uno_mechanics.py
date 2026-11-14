@@ -34,3 +34,16 @@ def draw_card(hand: list[Card]) -> Card:
 
     hand.append(Card(color, value))
     return hand[-1] # return the card that was drawn
+
+def play_card(hand: list[Card], card: Card) -> bool:
+
+    from game import game_state
+
+    if card not in hand:
+        return False # cannot play a card that is not in your hand
+
+    hand.remove(card)
+
+    game_state["top_card"] = card # set the top card to the played card
+
+    return True # successfully played the card
