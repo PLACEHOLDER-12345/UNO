@@ -71,19 +71,94 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     button_3.check_click(events)  
 
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
-    # load the image for the "YOUR TURN" arrow & resize it.
+    screen.fill(SCREEN_BG)
+
+    # STEP 1: DRAW THE YOUR TURN ARROW
     your_turn = pygame.image.load(other.resource_path("assets\\YOUR_TURN.png")).convert_alpha()
     your_turn = pygame.transform.scale(your_turn, (160, 120))
 
     # a formula to rotate the image to point at the turn of whoever's turn it is.
     your_turn = pygame.transform.rotate(your_turn, 90 - (game.game_state["current_turn"] * 90))
 
-    # the YOUR TURN arrow
-
-    screen.fill(SCREEN_BG)
-
     # reminder to accomodate a max of 4 players only.
     screen.blit(your_turn, (300, 225))
+
+    # STEP 2: DRAW THE CARDS (up to 10 each)
+
+    CARD_STRS = ["red", "yellow", "green", "blue", "wild"]
+    CARD_VALS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
+                 "skip", "reverse", "draw_two", "wild", "wild_draw_four"]
+
+    for i, card in enumerate(game.game_state["player_data"][0].hand):
+        # load the image for the card & resize it.
+
+        card_image = pygame.image.load(other.resource_path(
+            f"assets\\cards\\{CARD_STRS[card.color]}_{CARD_VALS[card.value]}.png"
+        )).convert_alpha()
+        card_image = pygame.transform.scale(card_image, (80, 120))
+
+        # blit the card to the screen
+        screen.blit(card_image, (200 + i * 40, 450))
+
+    # CENSOR EVERY OTHER PERSON'S CARDS
+
+    for i, card in enumerate(game.game_state["player_data"][1].hand):
+        # load the image for the card & resize it.
+        card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
+        card_image = pygame.transform.scale(card_image, (80, 120))
+        card_image = pygame.transform.rotate(card_image, 90)
+
+        # blit
+        screen.blit(card_image, (50, 150 + i * 30))
+
+    for i, card in enumerate(game.game_state["player_data"][2].hand):
+        # load the image for the card & resize it.
+        card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
+        card_image = pygame.transform.scale(card_image, (80, 120))
+        card_image = pygame.transform.rotate(card_image, 180)
+
+        # blit
+        screen.blit(card_image, (450 - i * 30, 0))
+
+    for i, card in enumerate(game.game_state["player_data"][3].hand):
+        # load the image for the card & resize it.
+        card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
+        card_image = pygame.transform.scale(card_image, (80, 120))
+        card_image = pygame.transform.rotate(card_image, -90)
+
+        # blit
+        screen.blit(card_image, (650, 400 - i * 30))
+
+    # STEP 3: DRAW THE TOP CARD OF THE DISCARD
+
+    top_card = game.game_state["top_card"]
+    if top_card: 
+        # load the image for the card & resize it.
+        card_image = pygame.image.load(other.resource_path(
+            f"assets\\cards\\{CARD_STRS[top_card.color]}_{CARD_VALS[top_card.value]}.png"
+        )).convert_alpha()
+        card_image = pygame.transform.scale(card_image, (80, 120))
+
+        # blit
+        screen.blit(card_image, (425, 250))
+
+    # STEP 4: DRAW THE DRAW PILE
+    draw_pile_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
+    draw_pile_image = pygame.transform.scale(draw_pile_image, (80, 120))
+    screen.blit(draw_pile_image, (525, 250))
+
+    # STEP 5: WRITE PLAYER NAMES AND CARD AMOUNTS
+    for i, player in enumerate(game.game_state["player_data"]):
+        # draw the name of the player
+        target_x, target_y = 0,0
+
+        if i == 0: target_x, target_y = (200, 580) # bottom
+        elif i == 1: target_x, target_y = (50, 150) # left
+        elif i == 2: target_x, target_y = (450, 10) # top
+        elif i == 3: target_x, target_y = (650, 400) # right
+
+        name_text = Textbox(target_x, target_y, f"{player.name} ({len(player.hand)} cards)", font_size = 24)
+        name_text.draw(screen)
 
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.currently_playing: draw_game_screen(screen, events)
