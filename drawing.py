@@ -95,45 +95,30 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
 
     CARD_SCALE = (80, 120) # width, height
 
-    for i, card in enumerate(game.game_state["player_data"][0].hand):
-        # load the image for the card & resize it.
+    # PLAYER'S CARDS (first player in a CPU game is the human, so show cards)
 
-        card_image = pygame.image.load(other.resource_path(
-            f"assets\\cards\\{CARD_STRS[card.color]}_{CARD_VALS[card.value]}.png"
-        )).convert_alpha()
-        card_image = pygame.transform.scale(card_image, CARD_SCALE)
+    CARD_LOCATIONS = {
+        0: (250, 425, 30, 0, 0), # x, y, x spacing, y spacing, rotation
+        1: (50, 150, 0, 30, 90),
+        2: (450, 50, -30, 0, 180),
+        3: (625, 400, 0, -30, -90),
+    }
 
-        # blit the card to the screen
-        screen.blit(card_image, (250 + i * 30, 425))
+    for i in range(len(game.game_state["player_data"])):
+        for j, card in enumerate(game.game_state["player_data"][i].hand):
+            # load card image & resize it
+            if not i == 0: card_image = pygame.image.load(other.resource_path("assets\\cards\\empty-card.png")).convert_alpha()
+            else: card_image = pygame.image.load(other.resource_path(
+                f"assets\\cards\\{CARD_STRS[card.color]}_{CARD_VALS[card.value]}.png"
+            )).convert_alpha()
+            card_image = pygame.transform.scale(card_image, CARD_SCALE)
+            card_image = pygame.transform.rotate(card_image, CARD_LOCATIONS[i][4])
 
-    # CENSOR EVERY OTHER PERSON'S CARDS
-
-    for i, card in enumerate(game.game_state["player_data"][1].hand):
-        # load the image for the card & resize it.
-        card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
-        card_image = pygame.transform.scale(card_image, CARD_SCALE)
-        card_image = pygame.transform.rotate(card_image, 90)
-
-        # blit
-        screen.blit(card_image, (50, 150 + i * 30))
-
-    for i, card in enumerate(game.game_state["player_data"][2].hand):
-        # load the image for the card & resize it.
-        card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
-        card_image = pygame.transform.scale(card_image, CARD_SCALE)
-        card_image = pygame.transform.rotate(card_image, 180)
-
-        # blit
-        screen.blit(card_image, (450 - i * 30, 50))
-
-    for i, card in enumerate(game.game_state["player_data"][3].hand):
-        # load the image for the card & resize it.
-        card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
-        card_image = pygame.transform.scale(card_image, CARD_SCALE)
-        card_image = pygame.transform.rotate(card_image, -90)
-
-        # blit
-        screen.blit(card_image, (625, 400 - i * 30))
+            # blit the card to the screen
+            screen.blit(card_image, (
+                CARD_LOCATIONS[i][0] + j * CARD_LOCATIONS[i][2],
+                CARD_LOCATIONS[i][1] + j * CARD_LOCATIONS[i][3]
+            ))
 
     # STEP 3: DRAW THE TOP CARD OF THE DISCARD
 
