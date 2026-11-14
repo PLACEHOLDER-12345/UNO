@@ -1,6 +1,7 @@
 # This file contains helpers to draw elements on the screen.
 
 import pygame
+import game
 
 WIDTH, HEIGHT = 800, 600
 
@@ -54,7 +55,7 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
 
     text_1 = Textbox(125, 50, "Welcome to UNO!", font_size = 72)
 
-    button_1 = Button(200, 200, 400, 75, "CPU Game", onclick = lambda: print("CPU Game button clicked!"))
+    button_1 = Button(200, 200, 400, 75, "CPU Game", onclick = game.start_CPU_game)
     button_2 = Button(200, 300, 400, 75, "Create Room", onclick = lambda: print("Create Room button clicked!"))
     button_3 = Button(200, 400, 400, 75, "Join Room", onclick = lambda: print("Join Room button clicked!"))
 
@@ -66,3 +67,12 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     button_1.check_click(events)  
     button_2.check_click(events)  
     button_3.check_click(events)  
+
+def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
+    screen.fill(SCREEN_BG)
+
+    pass # TODO
+
+def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
+    if game.currently_playing: draw_game_screen(screen, events)
+    else: draw_main_menu(screen, events)

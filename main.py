@@ -12,7 +12,7 @@ pygame.init()
 
 # Set up display
 screen = pygame.display.set_mode((drawing.WIDTH, drawing.HEIGHT))
-pygame.display.set_caption('Pygame Boilerplate')
+pygame.display.set_caption('UNO Game')
 
 # Set up the clock for managing the frame rate
 FPS = 60
@@ -31,7 +31,7 @@ while True:
     # Update game state
 
     # Draw
-    drawing.draw_main_menu(screen, events)
+    drawing.draw(screen, events)
     drawing.draw_grid(screen)
 
     # Flip the display to show the new frame
