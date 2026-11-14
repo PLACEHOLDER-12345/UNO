@@ -81,7 +81,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     your_turn = pygame.transform.rotate(your_turn, 90 - (game.game_state["current_turn"] * 90))
 
     # reminder to accomodate a max of 4 players only.
-    screen.blit(your_turn, (300, 225))
+    screen.blit(your_turn, (350, 225))
 
     # STEP 2: DRAW THE CARDS (up to 10 each)
 
@@ -89,23 +89,25 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     CARD_VALS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
                  "skip", "reverse", "draw_two", "wild", "wild_draw_four"]
 
+    CARD_SCALE = (80, 120) # width, height
+
     for i, card in enumerate(game.game_state["player_data"][0].hand):
         # load the image for the card & resize it.
 
         card_image = pygame.image.load(other.resource_path(
             f"assets\\cards\\{CARD_STRS[card.color]}_{CARD_VALS[card.value]}.png"
         )).convert_alpha()
-        card_image = pygame.transform.scale(card_image, (80, 120))
+        card_image = pygame.transform.scale(card_image, CARD_SCALE)
 
         # blit the card to the screen
-        screen.blit(card_image, (200 + i * 40, 450))
+        screen.blit(card_image, (250 + i * 30, 425))
 
     # CENSOR EVERY OTHER PERSON'S CARDS
 
     for i, card in enumerate(game.game_state["player_data"][1].hand):
         # load the image for the card & resize it.
         card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
-        card_image = pygame.transform.scale(card_image, (80, 120))
+        card_image = pygame.transform.scale(card_image, CARD_SCALE)
         card_image = pygame.transform.rotate(card_image, 90)
 
         # blit
@@ -114,20 +116,20 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     for i, card in enumerate(game.game_state["player_data"][2].hand):
         # load the image for the card & resize it.
         card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
-        card_image = pygame.transform.scale(card_image, (80, 120))
+        card_image = pygame.transform.scale(card_image, CARD_SCALE)
         card_image = pygame.transform.rotate(card_image, 180)
 
         # blit
-        screen.blit(card_image, (450 - i * 30, 0))
+        screen.blit(card_image, (450 - i * 30, 50))
 
     for i, card in enumerate(game.game_state["player_data"][3].hand):
         # load the image for the card & resize it.
         card_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
-        card_image = pygame.transform.scale(card_image, (80, 120))
+        card_image = pygame.transform.scale(card_image, CARD_SCALE)
         card_image = pygame.transform.rotate(card_image, -90)
 
         # blit
-        screen.blit(card_image, (650, 400 - i * 30))
+        screen.blit(card_image, (625, 400 - i * 30))
 
     # STEP 3: DRAW THE TOP CARD OF THE DISCARD
 
@@ -137,27 +139,30 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         card_image = pygame.image.load(other.resource_path(
             f"assets\\cards\\{CARD_STRS[top_card.color]}_{CARD_VALS[top_card.value]}.png"
         )).convert_alpha()
-        card_image = pygame.transform.scale(card_image, (80, 120))
+        card_image = pygame.transform.scale(card_image, CARD_SCALE)
 
         # blit
-        screen.blit(card_image, (425, 250))
+        screen.blit(card_image, (250, 250))
 
     # STEP 4: DRAW THE DRAW PILE
     draw_pile_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
-    draw_pile_image = pygame.transform.scale(draw_pile_image, (80, 120))
-    screen.blit(draw_pile_image, (525, 250))
+    draw_pile_image = pygame.transform.scale(draw_pile_image, CARD_SCALE)
+    screen.blit(draw_pile_image, (475, 250))
 
     # STEP 5: WRITE PLAYER NAMES AND CARD AMOUNTS
     for i, player in enumerate(game.game_state["player_data"]):
         # draw the name of the player
-        target_x, target_y = 0,0
+        target_x, target_y, rotation = 0, 0, 0
 
-        if i == 0: target_x, target_y = (200, 580) # bottom
-        elif i == 1: target_x, target_y = (50, 150) # left
-        elif i == 2: target_x, target_y = (450, 10) # top
-        elif i == 3: target_x, target_y = (650, 400) # right
+        if i == 0: target_x, target_y = (250, 555) # bottom
+        elif i == 1: target_x, target_y = (0, 200) # left
+        elif i == 2: target_x, target_y = (350, 10) # top
+        elif i == 3: target_x, target_y = (750, 250) # right
+
+        rotation = i * 90
 
         name_text = Textbox(target_x, target_y, f"{player.name} ({len(player.hand)} cards)", font_size = 24)
+        name_text.text_surf = pygame.transform.rotate(name_text.text_surf, rotation)
         name_text.draw(screen)
 
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):

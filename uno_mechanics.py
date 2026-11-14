@@ -11,25 +11,26 @@ class Card: # a single UNO card with a color and value.
         return f"{self.color} {self.value}"
 
 def get_random_card() -> Card:
-    color: int = random.randint(0, 4)
-    value: int = random.randint(0, 14)
+    while True:
+        color: int = random.randint(0, 4)
+        value: int = random.randint(0, 14)
 
-    # fix "limbo" card states
-    if color == 4: # wild cards can only be 13 (wild) or 14 (wild draw 4)
-        if value not in (13, 14): value = random.choice((13, 14))
-    else: # standard colors cannot use wild values
-        if value > 12: value = random.randint(0, 12)
+        if color == 4: # wild cards can only be 13 (wild) or 14 (wild draw 4)
+            if value not in (13, 14): continue
+        else: # standard colors cannot use wild values
+            if value > 12: continue
 
-    return Card(color, value)
+        return Card(color, value)
 
 def draw_card(hand: list[Card]) -> Card:
-    color: int = random.randint(0, 4)
-    value: int = random.randint(0, 14)
+    while True:
+        color: int = random.randint(0, 4)
+        value: int = random.randint(0, 14)
 
-    # fix "limbo" card states
-    if color == 4: # wild cards can only be 13 (wild) or 14 (wild draw 4)
-        if value not in (13, 14): value = random.choice((13, 14))
-    else: # standard colors cannot use wild values
-        if value > 12: value = random.randint(0, 12)
+        # wild cards can only be 13 (wild) or 14 (wild draw 4)
+        if color == 4 and value in (13, 14): break
+        # standard colors cannot use wild values
+        if color != 4 and value <= 12: break
 
     hand.append(Card(color, value))
+    return hand[-1] # return the card that was drawn
