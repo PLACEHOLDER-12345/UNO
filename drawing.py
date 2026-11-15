@@ -77,12 +77,17 @@ def draw_win_screen(screen:pygame.Surface, events: list[pygame.event.Event]):
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.fill(SCREEN_BG)
 
+    viewer_id = game.game_state["local_player_id"]
+    player_count = len(game.game_state["player_data"])
+
     # STEP 1: DRAW THE YOUR TURN ARROW
     your_turn = pygame.image.load(other.resource_path("assets\\YOUR_TURN.png")).convert_alpha()
     your_turn = pygame.transform.scale(your_turn, (160, 120))
 
+    relative_turn = (game.game_state["current_turn"] - viewer_id) % player_count
+
     # a formula to rotate the image to point at the turn of whoever's turn it is.
-    your_turn = pygame.transform.rotate(your_turn, 90 - (game.game_state["current_turn"] * 90))
+    your_turn = pygame.transform.rotate(your_turn, 90 - (relative_turn * 90))
 
     # reminder to accomodate a max of 4 players only.
     screen.blit(your_turn, (350, 225))
@@ -104,26 +109,30 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         3: (625, 400, 0, -30, -90),
     }
 
-    for i in range(len(game.game_state["player_data"])):
-        for j, card in enumerate(game.game_state["player_data"][i].hand):
-            # load card image & resize it
-            if not i == 0: card_image = pygame.image.load(other.resource_path("assets\\cards\\empty-card.png")).convert_alpha()
-            else: card_image = pygame.image.load(other.resource_path(
-                f"assets\\cards\\{CARD_STRS[card.color]}_{CARD_VALS[card.value]}.png"
-            )).convert_alpha()
-            card_image = pygame.transform.scale(card_image, CARD_SCALE)
-            card_image = pygame.transform.rotate(card_image, CARD_LOCATIONS[i][4])
+    for player_id, player in enumerate(game.game_state["player_data"]):
+        seat = (player_id - viewer_id) % player_count
 
-            # blit the card to the screen
+        start_x, start_y, spacing_x, spacing_y, rotation = CARD_LOCATIONS[seat]
+
+        for card_index, card in enumerate(player.hand):
+            # show the viewer's cards
+            if player_id == viewer_id:
+                filename = f"assets\\cards\\{CARD_STRS[card.color]}_{CARD_VALS[card.value]}.png"
+            else: filename = "assets\\cards\\empty-card.png"
+
+            card_image = pygame.image.load(other.resource_path(filename)).convert_alpha()
+            card_image = pygame.transform.scale(card_image, CARD_SCALE)
+            card_image = pygame.transform.rotate(card_image, rotation)
+
             screen.blit(card_image, (
-                CARD_LOCATIONS[i][0] + j * CARD_LOCATIONS[i][2],
-                CARD_LOCATIONS[i][1] + j * CARD_LOCATIONS[i][3]
+                start_x + card_index * spacing_x,
+                start_y + card_index * spacing_y
             ))
 
     # STEP 3: DRAW THE TOP CARD OF THE DISCARD
 
     top_card = game.game_state["top_card"]
-    if top_card: 
+    if top_card is not None: 
         # load the image for the card & resize it.
         card_image = pygame.image.load(other.resource_path(
             f"assets\\cards\\{CARD_STRS[top_card.color]}_{CARD_VALS[top_card.value]}.png"
@@ -139,16 +148,18 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.blit(draw_pile_image, (475, 250))
 
     # STEP 5: WRITE PLAYER NAMES AND CARD AMOUNTS
-    for i, player in enumerate(game.game_state["player_data"]):
+    for player_id, player in enumerate(game.game_state["player_data"]):
+        seat = (player_id - viewer_id) % player_count
+        
         # draw the name of the player
         target_x, target_y, rotation = 0, 0, 0
 
-        if i == 0: target_x, target_y = (250, 555) # bottom
-        elif i == 1: target_x, target_y = (0, 200) # left
-        elif i == 2: target_x, target_y = (350, 10) # top
-        elif i == 3: target_x, target_y = (750, 250) # right
+        if player_id == 0: target_x, target_y, rotation = (250, 555, 0) # bottom
+        elif player_id == 1: target_x, target_y, rotation = (0, 200, 90) # left
+        elif player_id == 2: target_x, target_y, rotation = (350, 10, 180) # top
+        elif player_id == 3: target_x, target_y, rotation = (750, 250, -90) # right
 
-        rotation = i * 90
+        rotation = player_id * 90
 
         name_text = Textbox(target_x, target_y, f"{player.name} ({len(player.hand)} cards)", font_size = 24)
         name_text.text_surf = pygame.transform.rotate(name_text.text_surf, rotation)

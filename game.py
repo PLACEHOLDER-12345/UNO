@@ -16,6 +16,8 @@ game_state = {
     "current_turn": 0, # index of the player whose turn it is
 
     "top_card": None, # card on top of the discard pile
+
+    "local_player_id": 0 # your local player ID
 }
 
 def take_turn(player: Player):
@@ -45,6 +47,8 @@ def start_CPU_game(): # start a game against CPU players
     game_state["current_turn"] = 0
     game_state["top_card"] = None
 
+    game_state["local_player_id"] = 0
+
     # deal cards to players
 
     for i in range(4): # 4 players
@@ -54,8 +58,8 @@ def start_CPU_game(): # start a game against CPU players
         player = Player(f"Player {i + 1}", i)
         game_state["player_data"].append(player)
 
-        for j in range(7): # 7 cards each
-            uno_mechanics.draw_card(game_state["player_data"][i].hand)
+        for _ in range(7): # 7 cards each
+            uno_mechanics.draw_card(player.hand)
 
         # set the top card to a random card
         game_state["top_card"] = uno_mechanics.get_random_card()
