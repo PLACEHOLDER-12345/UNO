@@ -4,19 +4,36 @@ import other
 
 import pygame
 import game
+from functools import lru_cache
 
 WIDTH, HEIGHT = 800, 600
 
 SCREEN_BG = (68, 68, 68) # #444
 TEXT_COLOR = (255, 255, 255) # #fff
 
+def load_image(path: str) -> pygame.Surface:
+    return pygame.image.load(other.resource_path(path)).convert_alpha()
+
+def get_image(path: str, size: tuple[int, int], rotation: int = 0) -> pygame.Surface:
+    image = pygame.transform.scale(load_image(path), size)
+    if rotation: image = pygame.transform.rotate(image, rotation)
+    return image
+
+def get_font(font_face: str, font_size: int) -> pygame.font.Font:
+    return pygame.font.SysFont(font_face, font_size)
+
+def render_text(text: str, font_face: str, font_size: int, rotation: int = 0) -> pygame.Surface:
+    text_surf = get_font(font_face, font_size).render(text, True, TEXT_COLOR)
+    if rotation: text_surf = pygame.transform.rotate(text_surf, rotation)
+    return text_surf
+
 class Button:
     def __init__(self, x, y, width, height, text, 
                  font_face = "Times New Roman", font_size = 36, onclick = None):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
-        self.font = pygame.font.SysFont(font_face, font_size)
-        self.text_surf = self.font.render(text, True, TEXT_COLOR)
+        self.font = get_font(font_face, font_size)
+        self.text_surf = render_text(text, font_face, font_size)
         self.text_rect = self.text_surf.get_rect(center=self.rect.center)
         self.onclick = onclick
 
@@ -37,9 +54,9 @@ class Button:
 
 class Textbox:
     def __init__(self, x, y, text, font_face = "Times New Roman", font_size = 36):
-        self.font = pygame.font.SysFont(font_face, font_size)
+        self.font = get_font(font_face, font_size)
         self.text = text
-        self.text_surf = self.font.render(self.text, True, TEXT_COLOR)
+        self.text_surf = render_text(self.text, font_face, font_size)
         self.x = x
         self.y = y
 
@@ -81,13 +98,14 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     player_count = len(game.game_state["player_data"])
 
     # STEP 1: DRAW THE YOUR TURN ARROW
-    your_turn = pygame.image.load(other.resource_path("assets\\YOUR_TURN.png")).convert_alpha()
-    your_turn = pygame.transform.scale(your_turn, (160, 120))
-
-    relative_turn = (game.game_state["current_turn"] - viewer_id) % player_count
+    relative_turn = (game.game_state["current_turn"]["absolute"] - viewer_id) % player_count
 
     # a formula to rotate the image to point at the turn of whoever's turn it is.
-    your_turn = pygame.transform.rotate(your_turn, 90 - (relative_turn * 90))
+    your_turn = get_image(
+        "assets\\YOUR_TURN.png",
+        (160, 120),
+        90 - (relative_turn * 90)
+    )
 
     # reminder to accomodate a max of 4 players only.
     screen.blit(your_turn, (350, 225))
@@ -97,8 +115,6 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     CARD_STRS = ["red", "yellow", "green", "blue", "wild"]
     CARD_VALS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
                  "skip", "reverse", "draw_two", "wild", "wild_draw_four"]
-
-    CARD_SCALE = (80, 120) # width, height
 
     # PLAYER'S CARDS (first player in a CPU game is the human, so show cards)
 
@@ -116,35 +132,27 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
 
         for card_index, card in enumerate(player.hand):
             # show the viewer's cards
-            if player_id == viewer_id:
-                filename = f"assets\\cards\\{CARD_STRS[card.color]}_{CARD_VALS[card.value]}.png"
-            else: filename = "assets\\cards\\empty-card.png"
+            if player_id == viewer_id: 
+                screen.blit(card.get_image(), (
+                    start_x + card_index * spacing_x,
+                    start_y + card_index * spacing_y
+                ))
+            else: 
+                filename = "assets\\cards\\empty-card.png"
+                card_image = get_image(filename, (80, 120), rotation)
 
-            card_image = pygame.image.load(other.resource_path(filename)).convert_alpha()
-            card_image = pygame.transform.scale(card_image, CARD_SCALE)
-            card_image = pygame.transform.rotate(card_image, rotation)
-
-            screen.blit(card_image, (
-                start_x + card_index * spacing_x,
-                start_y + card_index * spacing_y
-            ))
+                screen.blit(card_image, (
+                    start_x + card_index * spacing_x,
+                    start_y + card_index * spacing_y
+                ))
 
     # STEP 3: DRAW THE TOP CARD OF THE DISCARD
 
     top_card = game.game_state["top_card"]
-    if top_card is not None: 
-        # load the image for the card & resize it.
-        card_image = pygame.image.load(other.resource_path(
-            f"assets\\cards\\{CARD_STRS[top_card.color]}_{CARD_VALS[top_card.value]}.png"
-        )).convert_alpha()
-        card_image = pygame.transform.scale(card_image, CARD_SCALE)
-
-        # blit
-        screen.blit(card_image, (250, 250))
+    if top_card is not None: screen.blit(top_card.get_image(), (250, 250))
 
     # STEP 4: DRAW THE DRAW PILE
-    draw_pile_image = pygame.image.load(other.resource_path(f"assets\\cards\\empty-card.png")).convert_alpha()
-    draw_pile_image = pygame.transform.scale(draw_pile_image, CARD_SCALE)
+    draw_pile_image = get_image("assets\\cards\\empty-card.png", (80, 120))
     screen.blit(draw_pile_image, (475, 250))
 
     # STEP 5: WRITE PLAYER NAMES AND CARD AMOUNTS
@@ -154,27 +162,30 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         # draw the name of the player
         target_x, target_y, rotation = 0, 0, 0
 
-        if player_id == 0: target_x, target_y, rotation = (250, 555, 0) # bottom
-        elif player_id == 1: target_x, target_y, rotation = (0, 200, 90) # left
-        elif player_id == 2: target_x, target_y, rotation = (350, 10, 180) # top
-        elif player_id == 3: target_x, target_y, rotation = (750, 250, -90) # right
+        if seat == 0: target_x, target_y = (250, 555) # bottom
+        elif seat == 1: target_x, target_y = (0, 200) # left
+        elif seat == 2: target_x, target_y = (350, 10) # top
+        elif seat == 3: target_x, target_y= (750, 250) # right
 
-        rotation = player_id * 90
+        rotation = seat * 90
 
         name_text = Textbox(target_x, target_y, f"{player.name} ({len(player.hand)} cards)", font_size = 24)
-        name_text.text_surf = pygame.transform.rotate(name_text.text_surf, rotation)
+        name_text.text_surf = render_text(name_text.text, "Times New Roman", 24, rotation)
         name_text.draw(screen)
 
     # STEP 6: DRAW THE "PLAY CARD" AND "DRAW CARD" BUTTONS
+    local_player = game.game_state["player_data"][viewer_id]
     play_button = Button(100, 500, 100, 33, "Play Card", font_size = 18,
-                         onclick = lambda: print("Play Card button clicked!"))
+                         onclick = lambda: game.play_button_handler(local_player))
     draw_button = Button(100, 450, 100, 33, "Draw Card", font_size = 18,
-                         onclick = lambda: print("Draw Card button clicked!"))
+                         onclick = lambda: game.draw_button_handler(local_player))
 
     play_button.draw(screen)
-    play_button.check_click(events)
     draw_button.draw(screen)
-    draw_button.check_click(events)
+
+    # if game.game_state["current_turn"] == game.game_state["local_player_id"]:
+    #     play_button.check_click(events)
+    #     draw_button.check_click(events)
 
     # CHECK FOR WINNER
     if game.game_state["winner"] is not None: draw_win_screen(screen, events)
