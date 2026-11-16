@@ -29,6 +29,7 @@ while True:
             sys.exit()
 
     # Update game state
+    game.update()
 
     # Draw
     drawing.draw(screen, events)

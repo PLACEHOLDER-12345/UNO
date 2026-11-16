@@ -1,7 +1,7 @@
 # This file involves game state & logic.
 
 import uno_mechanics
-import time
+from pygame import time
 
 class Player: # a single player object
     def __init__ (self, name: str, player_id: int):
@@ -32,7 +32,9 @@ game_state = {
 
     "local_player_id": 0, # your local player ID
 
-    "player_on_card_picker": False
+    "player_on_card_picker": False,
+
+    "next_CPU_turn_time": 0
 }
 
 def end_turn():
@@ -102,6 +104,21 @@ def check_for_winner() -> Player | None: # check if any player has won the game
             return player # return the winning player
     return None # no winner yet
 
+def update():
+    if not currently_playing: return
+    if game_state["winner"] is not None: return
+
+    current_player: Player = game_state["player_data"][game_state["current_turn"]["absolute"]]
+
+    now = time.get_ticks()
+    if now <= game_state["next_CPU_turn_time"]: return
+
+    CPU_play(current_player)
+
+    check_for_winner()
+
+    game_state["next_CPU_turn_time"] = now + 2000
+
 def start_CPU_game(): # start a game against CPU players
     print("Starting CPU game.")
 
@@ -137,15 +154,3 @@ def start_CPU_game(): # start a game against CPU players
         game_state["top_card"] = uno_mechanics.get_random_card()
 
     game_state["turn_player"] = game_state["player_data"][0]
-
-    while game_state["winner"] is None: 
-        current_player = game_state["player_data"][game_state["current_turn"]["absolute"]]
-        # test: run a CPU game
-        if current_player == game_state["player_data"][game_state["local_player_id"]]: 
-            CPU_play(current_player)
-            time.sleep(2)
-        else: 
-            CPU_play(current_player)
-            time.sleep(2)
-
-        if check_for_winner() is not None: break # check if any player has won the game

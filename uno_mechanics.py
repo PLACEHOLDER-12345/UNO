@@ -22,7 +22,11 @@ class Card: # a single UNO card with a color and value.
         return f"{CARD_COLORS[self.color]} {CARD_VALUES[self.value]}"
 
     def get_image(self):
-        path = f"assets\\cards\\{CARD_COLORS[self.color].lower()}_{CARD_VALUES[self.value].lower()}.png"
+        new_value_str = CARD_VALUES[self.value]
+        if new_value_str == "+2": new_value_str = "draw_two"
+        if new_value_str == "wild +4": new_value_str = "wild_draw_four"
+        
+        path = f"assets\\cards\\{CARD_COLORS[self.color].lower()}_{new_value_str}.png"
 
         if path not in card_cache:
             image = pygame.image.load(other.resource_path(path)).convert_alpha()
