@@ -102,19 +102,6 @@ def check_for_winner() -> Player | None: # check if any player has won the game
             return player # return the winning player
     return None # no winner yet
 
-def main_loop():
-    while game_state["winner"] is None: 
-        current_player = game_state["player_data"][game_state["current_turn"]["absolute"]]
-        # test: run a CPU game
-        if current_player == game_state["player_data"][game_state["local_player_id"]]: 
-            CPU_play(current_player)
-            time.sleep(2)
-        else: 
-            CPU_play(current_player)
-            time.sleep(2)
-
-        if check_for_winner() is not None: break # check if any player has won the game
-
 def start_CPU_game(): # start a game against CPU players
     print("Starting CPU game.")
 
@@ -151,4 +138,14 @@ def start_CPU_game(): # start a game against CPU players
 
     game_state["turn_player"] = game_state["player_data"][0]
 
-    main_loop()
+    while game_state["winner"] is None: 
+        current_player = game_state["player_data"][game_state["current_turn"]["absolute"]]
+        # test: run a CPU game
+        if current_player == game_state["player_data"][game_state["local_player_id"]]: 
+            CPU_play(current_player)
+            time.sleep(2)
+        else: 
+            CPU_play(current_player)
+            time.sleep(2)
+
+        if check_for_winner() is not None: break # check if any player has won the game
