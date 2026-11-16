@@ -25,8 +25,7 @@ game_state = {
         "relative": 0, # relative to the list turn_order
     }, # index of the player whose turn it is
     "turn_player": None, # the player object of the current turn
-
-    "turn_order": [0, 1, 2, 3], # the turn order in indexes
+    "turn_order": [0, 1, 2, 3], # the turn order in indices
 
     "top_card": None, # card on top of the discard pile
 
@@ -34,7 +33,9 @@ game_state = {
 
     "player_on_card_picker": False,
 
-    "next_CPU_turn_time": 0
+    "next_CPU_turn_time": 0,
+
+    "choosing_wild_color": 0 # 0 is false, 1 is choosing, 2, 3, 4, 5 is chosen red, yellow, green, blue.
 }
 
 def end_turn():
@@ -64,6 +65,13 @@ def draw_button_handler(player: Player):
 def take_turn(player: Player):
     # not this player's turn
     if player.player_id != game_state["current_turn"]["absolute"]: return
+
+    if player.status["skipped"]:
+        print("You're skipped!")
+
+        player.status["skipped"] = False
+        end_turn()
+        return
 
     # enable turn controls
     game_state["turn_player"] = player

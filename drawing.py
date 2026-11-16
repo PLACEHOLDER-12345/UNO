@@ -87,10 +87,27 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     button_2.check_click(events)  
     button_3.check_click(events)  
 
-def draw_win_screen(screen: pygame.Surface, events: list[pygame.event.Event], winner: game.Player):
+def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], chooser: game.Player):
+    from uno_mechanics import CARD_COLORS
+    from pygame.time import delay
+
+    choosing_wild_color = game.game_state["choosing_wild_color"]
+
+    if choosing_wild_color == 1:
+        Textbox(100, 300, f"""{chooser.name}, pick a color!
+    Press R for red, Y for yellow, G for green, B for blue.""").draw(screen)
+    elif choosing_wild_color in {2, 3, 4, 5}:
+        Textbox(
+            150, 400, f"The chosen color was... {CARD_COLORS[choosing_wild_color - 2].upper()}!",
+            font_size = 18
+        ).draw(screen)
+        delay(1000)
+
+        game.game_state["choosing_wild_color"] = 0
+
+def draw_win_text(screen: pygame.Surface, winner: game.Player):
     # a supplement to draw_game_screen that is also there on a win.
-    win_text = Textbox(200, 300, f"{winner.name} WINS!")
-    win_text.draw()
+    Textbox(200, 300, f"{winner.name} WINS!").draw(screen)
 
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.fill(SCREEN_BG)
@@ -133,19 +150,21 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
 
         for card_index, card in enumerate(player.hand):
             # show the viewer's cards
-            if player_id == viewer_id: 
-                screen.blit(card.get_image(), (
-                    start_x + card_index * spacing_x,
-                    start_y + card_index * spacing_y
-                ))
-            else: 
-                filename = "assets\\cards\\empty-card.png"
-                card_image = get_image(filename, (80, 120), rotation)
+            if card_index < 10:
+                if player_id == viewer_id: 
+                    screen.blit(card.get_image(), (
+                        start_x + card_index * spacing_x,
+                        start_y + card_index * spacing_y
+                    ))
+                else: 
+                    filename = "assets\\cards\\empty-card.png"
+                    card_image = get_image(filename, (80, 120), rotation)
 
-                screen.blit(card_image, (
-                    start_x + card_index * spacing_x,
-                    start_y + card_index * spacing_y
-                ))
+                    screen.blit(card_image, (
+                        start_x + card_index * spacing_x,
+                        start_y + card_index * spacing_y
+                    ))
+            else: break
 
     # STEP 3: DRAW THE TOP CARD OF THE DISCARD
 
@@ -181,15 +200,17 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     draw_button = Button(100, 450, 100, 33, "Draw Card", font_size = 18,
                          onclick = lambda: game.draw_button_handler(local_player))
 
-    play_button.draw(screen)
-    draw_button.draw(screen)
+    if game.game_state["current_turn"]["absolute"] == game.game_state["local_player_id"]:
+        play_button.draw(screen)
+        draw_button.draw(screen)
+        play_button.check_click(events)
+        draw_button.check_click(events)
 
-    # if game.game_state["current_turn"] == game.game_state["local_player_id"]:
-    #     play_button.check_click(events)
-    #     draw_button.check_click(events)
+    # CHECK IF CHOOSING WILD
+    if game.game_state["choosing_wild_color"]: draw_wild_pick(screen, events, game.game_state["turn_player"])
 
     # CHECK FOR WINNER
-    if game.game_state["winner"] is not None: draw_win_screen(screen, events, game.game_state["winner"])
+    if game.game_state["winner"] is not None: draw_win_text(screen, game.game_state["winner"])
 
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.currently_playing: draw_game_screen(screen, events)

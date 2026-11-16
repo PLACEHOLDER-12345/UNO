@@ -66,6 +66,8 @@ def draw_card(hand: list[Card]) -> Card:
 def wild_card(card: Card) -> Card:
     from game import game_state
 
+    game_state["choosing_wild_color"] = 1
+
     # if game_state["turn_player"] == game_state["player_data"][game_state["local_player_id"]]: # if local player
     #     color_keys = {
     #         pygame.K_r: 0,  # Red
@@ -83,6 +85,9 @@ def wild_card(card: Card) -> Card:
     #     card.color = random.choice((0, 1, 2, 3))
 
     card.color = random.choice((0, 1, 2, 3))
+    print(f"The color was: {CARD_COLORS[card.color]}")
+
+    game_state["choosing_wild_color"] = card.color + 2
 
 def play_card(hand: list[Card], card: Card) -> Card:
 
