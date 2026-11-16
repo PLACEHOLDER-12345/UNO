@@ -87,9 +87,10 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     button_2.check_click(events)  
     button_3.check_click(events)  
 
-def draw_win_screen(screen:pygame.Surface, events: list[pygame.event.Event]):
+def draw_win_screen(screen: pygame.Surface, events: list[pygame.event.Event], winner: game.Player):
     # a supplement to draw_game_screen that is also there on a win.
-    pass
+    win_text = Textbox(200, 300, f"{winner.name} WINS!")
+    win_text.draw()
 
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.fill(SCREEN_BG)
@@ -153,7 +154,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
 
     # STEP 4: DRAW THE DRAW PILE
     draw_pile_image = get_image("assets\\cards\\empty-card.png", (80, 120))
-    screen.blit(draw_pile_image, (475, 250))
+    screen.blit(draw_pile_image, (500, 250))
 
     # STEP 5: WRITE PLAYER NAMES AND CARD AMOUNTS
     for player_id, player in enumerate(game.game_state["player_data"]):
@@ -188,7 +189,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     #     draw_button.check_click(events)
 
     # CHECK FOR WINNER
-    if game.game_state["winner"] is not None: draw_win_screen(screen, events)
+    if game.game_state["winner"] is not None: draw_win_screen(screen, events, game.game_state["winner"])
 
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.currently_playing: draw_game_screen(screen, events)

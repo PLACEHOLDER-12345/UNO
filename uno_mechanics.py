@@ -26,7 +26,9 @@ class Card: # a single UNO card with a color and value.
         if new_value_str == "+2": new_value_str = "draw_two"
         if new_value_str == "wild +4": new_value_str = "wild_draw_four"
         
-        path = f"assets\\cards\\{CARD_COLORS[self.color].lower()}_{new_value_str}.png"
+        path = f"""assets\\cards\\{
+            CARD_COLORS[self.color].lower() if self.value not in (13, 14) else "wild"
+        }_{new_value_str}.png"""
 
         if path not in card_cache:
             image = pygame.image.load(other.resource_path(path)).convert_alpha()
@@ -64,21 +66,23 @@ def draw_card(hand: list[Card]) -> Card:
 def wild_card(card: Card) -> Card:
     from game import game_state
 
-    if game_state["turn_player"] == game_state["player_data"][game_state["local_player_id"]]: # if local player
-        color_keys = {
-            pygame.K_r: 0,  # Red
-            pygame.K_y: 1,  # Yellow
-            pygame.K_b: 2,  # Blue
-            pygame.K_g: 3,  # Green
-        }
+    # if game_state["turn_player"] == game_state["player_data"][game_state["local_player_id"]]: # if local player
+    #     color_keys = {
+    #         pygame.K_r: 0,  # Red
+    #         pygame.K_y: 1,  # Yellow
+    #         pygame.K_b: 2,  # Blue
+    #         pygame.K_g: 3,  # Green
+    #     }
 
-        while True:
-            event = pygame.event.wait()
-            if event.type == pygame.KEYDOWN and event.key in color_keys:
-                card.color = color_keys[event.key]
-                break
-    else: # if CPU
-        card.color = random.choice((0, 1, 2, 3))
+    #     while True:
+    #         event = pygame.event.wait()
+    #         if event.type == pygame.KEYDOWN and event.key in color_keys:
+    #             card.color = color_keys[event.key]
+    #             break
+    # else: # if CPU
+    #     card.color = random.choice((0, 1, 2, 3))
+
+    card.color = random.choice((0, 1, 2, 3))
 
 def play_card(hand: list[Card], card: Card) -> Card:
 
@@ -116,10 +120,12 @@ def play_card(hand: list[Card], card: Card) -> Card:
 
     # reverse
     if card.value == 11:
+        current_player = game_state["current_turn"]["absolute"]
+        
         game_state["turn_order"].reverse()
         game_state["current_turn"] = {
-            "absolute": game_state["turn_order"][0],
-            "relative": 0
+            "absolute": current_player,
+            "relative": game_state["turn_order"].index(current_player)
         }
 
     return game_state["top_card"]
