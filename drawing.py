@@ -4,7 +4,6 @@ import other
 
 import pygame
 import game
-from functools import lru_cache
 
 WIDTH, HEIGHT = 800, 600
 
@@ -14,7 +13,7 @@ TEXT_COLOR = (255, 255, 255) # #fff
 def load_image(path: str) -> pygame.Surface:
     return pygame.image.load(other.resource_path(path)).convert_alpha()
 
-def get_image(path: str, size: tuple[int, int], rotation: int = 0) -> pygame.Surface:
+def get_image_by_path(path: str, size: tuple[int, int], rotation: int = 0) -> pygame.Surface:
     image = pygame.transform.scale(load_image(path), size)
     if rotation: image = pygame.transform.rotate(image, rotation)
     return image
@@ -51,6 +50,22 @@ class Button:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.rect.collidepoint(event.pos): 
                     if self.onclick: self.onclick()
+
+class ButtonImage:
+    def __init__(self, x, y, image: pygame.Surface | str, size, onclick = None):
+        if isinstance(image, str): self.image = get_image_by_path(image, size)
+        else: self.image = image
+        self.rect = self.image.get_rect(topleft = (x, y))
+        self.onclick = onclick
+
+    def draw(self, screen: pygame.Surface):
+        screen.blit(self.image, self.rect)
+
+    def check_click(self, events: list[pygame.event.Event]):
+        for event in events:
+            if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
+                if self.onclick:
+                    self.onclick()
 
 class Textbox:
     def __init__(self, x, y, text, font_face = "Times New Roman", font_size = 36):
@@ -97,17 +112,58 @@ def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], cho
         Textbox(100, 300, f"""{chooser.name}, pick a color!
     Press R for red, Y for yellow, G for green, B for blue.""").draw(screen)
     elif choosing_wild_color in {2, 3, 4, 5}:
+        delay(2000)
+
         Textbox(
-            150, 400, f"The chosen color was... {CARD_COLORS[choosing_wild_color - 2].upper()}!",
-            font_size = 18
+            300, 400, f"The chosen color was... {CARD_COLORS[choosing_wild_color - 2].upper()}!",
+            font_size = 24
         ).draw(screen)
-        delay(1000)
+
+        pygame.display.flip()
+
+        delay(2000)
 
         game.game_state["choosing_wild_color"] = 0
 
+def draw_card_picker(screen: pygame.Surface, events: list[pygame.event.Event], card_picker: game.Player):
+    from uno_mechanics import is_card_playable
+    # COVER THE WHOLE SCREEN
+    screen.fill(SCREEN_BG)
+
+    Textbox(50, 50, f"{card_picker.name}, choose a card to play!").draw(screen)
+
+    CARDS_PER_ROW = 5
+
+    page = game.game_state["card_picker_page"]
+
+    start = (page - 1) * 12
+    end = start + 12
+
+    pygame.draw.rect(screen, (128, 128, 128), pygame.rect.Rect(100, 100, 600, 450))
+
+    playable_cards = [card for card in card_picker.hand if is_card_playable(card)]
+
+    for i, card in enumerate(playable_cards[start:end]):
+        row = i // CARDS_PER_ROW
+        col = i %  CARDS_PER_ROW
+
+        x = 100 + col * 120
+        y = 100 + row * 140
+
+        button = ButtonImage(x, y, card.get_image(), (80, 120),
+                             onclick = lambda c=card: game.select_card(card_picker, c))
+        button.draw(screen); button.check_click(events)
+
+def draw_UNO_text(screen: pygame.Surface, recipient: game.Player):
+    Textbox(250, 375, f"{recipient.name} UNO!").draw(screen)
+
+    pygame.time.delay(3000)
+
 def draw_win_text(screen: pygame.Surface, winner: game.Player):
     # a supplement to draw_game_screen that is also there on a win.
-    Textbox(200, 300, f"{winner.name} WINS!").draw(screen)
+    Textbox(250, 375, f"{winner.name} WINS!").draw(screen)
+
+    pygame.quit()
 
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.fill(SCREEN_BG)
@@ -119,11 +175,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     relative_turn = (game.game_state["current_turn"]["absolute"] - viewer_id) % player_count
 
     # a formula to rotate the image to point at the turn of whoever's turn it is.
-    your_turn = get_image(
-        "assets\\YOUR_TURN.png",
-        (160, 120),
-        90 - (relative_turn * 90)
-    )
+    your_turn = get_image_by_path("assets\\YOUR_TURN.png", (160, 120), 90 - (relative_turn * 90))
 
     # reminder to accomodate a max of 4 players only.
     screen.blit(your_turn, (350, 225))
@@ -158,7 +210,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
                     ))
                 else: 
                     filename = "assets\\cards\\empty-card.png"
-                    card_image = get_image(filename, (80, 120), rotation)
+                    card_image = get_image_by_path(filename, (80, 120), rotation)
 
                     screen.blit(card_image, (
                         start_x + card_index * spacing_x,
@@ -172,7 +224,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     if top_card is not None: screen.blit(top_card.get_image(), (250, 250))
 
     # STEP 4: DRAW THE DRAW PILE
-    draw_pile_image = get_image("assets\\cards\\empty-card.png", (80, 120))
+    draw_pile_image = get_image_by_path("assets\\cards\\empty-card.png", (80, 120))
     screen.blit(draw_pile_image, (500, 250))
 
     # STEP 5: WRITE PLAYER NAMES AND CARD AMOUNTS
@@ -206,11 +258,17 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         play_button.check_click(events)
         draw_button.check_click(events)
 
+    # CHECK FOR UNO!
+    if game.game_state["UNO!"]: draw_UNO_text(screen, game.game_state["turn_player"])
+    
+    # CHECK FOR WINNER
+    if game.game_state["winner"] is not None: draw_win_text(screen, game.game_state["winner"])
+
     # CHECK IF CHOOSING WILD
     if game.game_state["choosing_wild_color"]: draw_wild_pick(screen, events, game.game_state["turn_player"])
 
-    # CHECK FOR WINNER
-    if game.game_state["winner"] is not None: draw_win_text(screen, game.game_state["winner"])
+    # CHECK IF ON CARD PICKER
+    if game.game_state["player_on_card_picker"]: draw_card_picker(screen, events, game.game_state["turn_player"])
 
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.currently_playing: draw_game_screen(screen, events)

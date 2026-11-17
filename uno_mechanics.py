@@ -4,8 +4,9 @@ import random
 import other
 import pygame
 
-CARD_COLORS = ["Red", "Yellow", "Blue", "Green", "Wild"]
-CARD_VALUES = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "skip", "reverse", "+2", "wild", "wild +4"]
+CARD_COLORS: list[str] = ["Red", "Yellow", "Blue", "Green", "Wild"]
+CARD_VALUES: list[str] = ["0", "1", "2", "3", "4", "5", "6", "7", 
+                          "8", "9", "skip", "reverse", "+2", "wild", "wild +4"]
 
 CARD_SCALE = (80, 120)
 
@@ -38,12 +39,13 @@ class Card: # a single UNO card with a color and value.
 
         return card_cache[path]
 
-def get_random_card() -> Card:
+def get_random_card(no_wilds = False) -> Card:
     while True:
         color: int = random.randint(0, 4)
         value: int = random.randint(0, 14)
 
         if color == 4: # wild cards can only be 13 (wild) or 14 (wild draw 4)
+            if no_wilds: continue
             if value not in (13, 14): continue
         else: # standard colors cannot use wild values
             if value > 12: continue
@@ -133,7 +135,15 @@ def play_card(hand: list[Card], card: Card) -> Card:
             "relative": game_state["turn_order"].index(current_player)
         }
 
+    # CHECK FOR UNO
+    if len(hand) == 1: UNO()
+
     return game_state["top_card"]
+
+def UNO(): 
+    from game import game_state
+
+    game_state["UNO!"] = True
 
 def is_card_playable(card: Card) -> bool:
     from game import game_state

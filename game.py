@@ -16,6 +16,8 @@ class Player: # a single player object
 currently_playing = False # whether the game is currently starting
 
 game_state = {
+    # PUBLIC DATA FOR EVERYONE
+
     "local_mult": False, # False = CPU Game, True = Local Multiplayer
 
     "player_data": [], # list of player objects
@@ -29,9 +31,14 @@ game_state = {
 
     "top_card": None, # card on top of the discard pile
 
+    "UNO!": False,
+
+    # LOCAL GAME STATE DATA
+
     "local_player_id": 0, # your local player ID
 
     "player_on_card_picker": False,
+    "card_picker_page": False,
 
     "next_CPU_turn_time": 0,
 
@@ -48,10 +55,27 @@ def end_turn():
     print(f"next turn: {game_state["player_data"][game_state['current_turn']["absolute"]].name}")
 
 def play_button_handler(player: Player):
+    from uno_mechanics import is_card_playable
     print("Play card button clicked!")
 
     if player.player_id != game_state["current_turn"]["absolute"]: 
         print("not ur turn"); return
+
+    playable_cards = [card for card in player.hand if is_card_playable(card)]
+
+    if len(playable_cards) != 0: # if any playable cards
+        game_state["player_on_card_picker"] = True
+        game_state["card_picker_page"] = 1 # 1-indexed
+
+    # the card picker code will turn it back to False when finished
+
+def select_card(player: Player, card: uno_mechanics.Card): # works in tandem with draw_card_picker()
+    from uno_mechanics import play_card
+
+    play_card(player.hand, card)
+    game_state["player_on_card_picker"] = False
+
+    end_turn()
 
 def draw_button_handler(player: Player):
     print("Draw card button clicked!")
@@ -65,6 +89,7 @@ def draw_button_handler(player: Player):
 def take_turn(player: Player):
     # not this player's turn
     if player.player_id != game_state["current_turn"]["absolute"]: return
+    if game_state["player_on_card_picker"]: return
 
     if player.status["skipped"]:
         print("You're skipped!")
@@ -117,15 +142,21 @@ def update():
     if game_state["winner"] is not None: return
 
     current_player: Player = game_state["player_data"][game_state["current_turn"]["absolute"]]
+    local_player: Player = game_state["player_data"][game_state["local_player_id"]]
+
+    if current_player == local_player: 
+        take_turn(current_player)
+        check_for_winner()
+        return
 
     now = time.get_ticks()
-    if now <= game_state["next_CPU_turn_time"]: return
+    if now < game_state["next_CPU_turn_time"]: return
 
     CPU_play(current_player)
 
     check_for_winner()
 
-    game_state["next_CPU_turn_time"] = now + 2000
+    game_state["next_CPU_turn_time"] = now + 2000 if current_player == local_player else now
 
 def start_CPU_game(): # start a game against CPU players
     print("Starting CPU game.")
@@ -159,6 +190,6 @@ def start_CPU_game(): # start a game against CPU players
         for _ in range(7): uno_mechanics.draw_card(player.hand)
 
         # set the top card to a random card
-        game_state["top_card"] = uno_mechanics.get_random_card()
+        game_state["top_card"] = uno_mechanics.get_random_card(no_wilds = True)
 
     game_state["turn_player"] = game_state["player_data"][0]
