@@ -43,7 +43,8 @@ game_state = {
 
     "next_CPU_turn_time": 0,
 
-    "choosing_wild_color": 0 # 0 is false, 1 is choosing, 2, 3, 4, 5 is chosen red, yellow, green, blue.
+    "choosing_wild_color": 0, # 0 is false, 1 is choosing, 2, 3, 4, 5 is chosen red, yellow, green, blue.
+    "wild_player": None
 }
 
 def end_turn():
@@ -141,6 +142,7 @@ def check_for_winner() -> Player | None: # check if any player has won the game
 def update():
     if not currently_playing: return
     if game_state["winner"] is not None: return
+    if game_state["choosing_wild_color"]: return
 
     current_player: Player = game_state["player_data"][game_state["current_turn"]["absolute"]]
     local_player: Player = game_state["player_data"][game_state["local_player_id"]]
@@ -175,6 +177,8 @@ def start_CPU_game(): # start a game against CPU players
     game_state["top_card"] = None
     game_state["UNO!"] = False
     game_state["uno_player"] = None
+    game_state["choosing_wild_color"] = 0
+    game_state["wild_player"] = None
     game_state["turn_order"] = [0, 1, 2, 3]
 
     game_state["local_player_id"] = 0

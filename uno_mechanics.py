@@ -68,28 +68,17 @@ def draw_card(hand: list[Card]) -> Card:
 def wild_card(card: Card) -> Card:
     from game import game_state
 
-    game_state["choosing_wild_color"] = 1
+    current_player = game_state["player_data"][game_state["current_turn"]["absolute"]]
+    game_state["wild_player"] = current_player
 
-    # if game_state["turn_player"] == game_state["player_data"][game_state["local_player_id"]]: # if local player
-    #     color_keys = {
-    #         pygame.K_r: 0,  # Red
-    #         pygame.K_y: 1,  # Yellow
-    #         pygame.K_b: 2,  # Blue
-    #         pygame.K_g: 3,  # Green
-    #     }
-
-    #     while True:
-    #         event = pygame.event.wait()
-    #         if event.type == pygame.KEYDOWN and event.key in color_keys:
-    #             card.color = color_keys[event.key]
-    #             break
-    # else: # if CPU
-    #     card.color = random.choice((0, 1, 2, 3))
+    if current_player.player_id == game_state["local_player_id"]:
+        game_state["choosing_wild_color"] = 1
+        return card
 
     card.color = random.choice((0, 1, 2, 3))
     print(f"The color was: {CARD_COLORS[card.color]}")
-
     game_state["choosing_wild_color"] = card.color + 2
+    return card
 
 def play_card(hand: list[Card], card: Card) -> Card:
 

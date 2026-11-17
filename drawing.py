@@ -9,6 +9,7 @@ WIDTH, HEIGHT = 800, 600
 
 SCREEN_BG = (68, 68, 68) # #444
 TEXT_COLOR = (255, 255, 255) # #fff
+_wild_result_started_at: int | None = None
 
 def load_image(path: str) -> pygame.Surface:
     return pygame.image.load(other.resource_path(path)).convert_alpha()
@@ -104,24 +105,37 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
 
 def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], chooser: game.Player):
     from uno_mechanics import CARD_COLORS
-    from pygame.time import delay
+    global _wild_result_started_at
 
     choosing_wild_color = game.game_state["choosing_wild_color"]
 
     if choosing_wild_color == 1:
-        Textbox(100, 300, f"""{chooser.name}, pick a color!
-    Press R for red, Y for yellow, G for green, B for blue.""").draw(screen)
+        Textbox(150, 375, f"""{chooser.name}, pick a color!
+    Press R for red, Y for yellow, G for green, B for blue.""", font_size = 18).draw(screen)
+        color_keys = {
+            pygame.K_r: 0,
+            pygame.K_y: 1,
+            pygame.K_b: 2,
+            pygame.K_g: 3,
+        }
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key in color_keys:
+                game.game_state["top_card"].color = color_keys[event.key]
+                game.game_state["choosing_wild_color"] = color_keys[event.key] + 2
+                _wild_result_started_at = pygame.time.get_ticks()
+                break
     elif choosing_wild_color in {2, 3, 4, 5}:
-        delay(2000)
-
+        if _wild_result_started_at is None:
+            _wild_result_started_at = pygame.time.get_ticks()
         Textbox(
             300, 400, f"The chosen color was... {CARD_COLORS[choosing_wild_color - 2].upper()}!",
             font_size = 24
         ).draw(screen)
 
-        delay(2000)
-
-        game.game_state["choosing_wild_color"] = 0
+        if pygame.time.get_ticks() - _wild_result_started_at >= 2000:
+            game.game_state["choosing_wild_color"] = 0
+            game.game_state["wild_player"] = None
+            _wild_result_started_at = None
 
 def draw_card_picker(screen: pygame.Surface, events: list[pygame.event.Event], card_picker: game.Player):
     from uno_mechanics import is_card_playable
@@ -265,11 +279,13 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     # CHECK FOR WINNER
     if game.game_state["winner"] is not None: draw_win_text(screen, game.game_state["winner"])
 
-    # CHECK IF CHOOSING WILD
-    if game.game_state["choosing_wild_color"]: draw_wild_pick(screen, events, game.game_state["turn_player"])
-
     # CHECK IF ON CARD PICKER
-    if game.game_state["player_on_card_picker"]: draw_card_picker(screen, events, game.game_state["turn_player"])
+    if game.game_state["player_on_card_picker"] and not game.game_state["choosing_wild_color"]:
+        draw_card_picker(screen, events, game.game_state["turn_player"])
+
+    # CHECK IF CHOOSING WILD
+    if game.game_state["choosing_wild_color"]:
+        draw_wild_pick(screen, events, game.game_state["wild_player"])
 
 def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.currently_playing: draw_game_screen(screen, events)
