@@ -119,8 +119,6 @@ def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], cho
             font_size = 24
         ).draw(screen)
 
-        pygame.display.flip()
-
         delay(2000)
 
         game.game_state["choosing_wild_color"] = 0
@@ -155,15 +153,18 @@ def draw_card_picker(screen: pygame.Surface, events: list[pygame.event.Event], c
         button.draw(screen); button.check_click(events)
 
 def draw_UNO_text(screen: pygame.Surface, recipient: game.Player):
+    pygame.time.delay(3000)
+
     Textbox(250, 375, f"{recipient.name} UNO!").draw(screen)
 
     pygame.time.delay(3000)
 
+    game.game_state["UNO!"] = False
+    game.game_state["uno_player"] = None
+
 def draw_win_text(screen: pygame.Surface, winner: game.Player):
     # a supplement to draw_game_screen that is also there on a win.
     Textbox(250, 375, f"{winner.name} WINS!").draw(screen)
-
-    pygame.quit()
 
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.fill(SCREEN_BG)
@@ -259,7 +260,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         draw_button.check_click(events)
 
     # CHECK FOR UNO!
-    if game.game_state["UNO!"]: draw_UNO_text(screen, game.game_state["turn_player"])
+    if game.game_state["UNO!"]: draw_UNO_text(screen, game.game_state["uno_player"])
     
     # CHECK FOR WINNER
     if game.game_state["winner"] is not None: draw_win_text(screen, game.game_state["winner"])

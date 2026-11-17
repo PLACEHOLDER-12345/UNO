@@ -143,6 +143,7 @@ def play_card(hand: list[Card], card: Card) -> Card:
 def UNO(): 
     from game import game_state
 
+    game_state["uno_player"] = game_state["player_data"][game_state["current_turn"]["absolute"]]
     game_state["UNO!"] = True
 
 def is_card_playable(card: Card) -> bool:

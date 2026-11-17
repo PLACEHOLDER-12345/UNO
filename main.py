@@ -17,6 +17,8 @@ pygame.display.set_caption('UNO Game')
 # Set up the clock for managing the frame rate
 FPS = 60
 GAME_CLOCK = pygame.time.Clock()
+WIN_DISPLAY_DURATION = 3000
+winner_display_started_at = None
 
 # Main game loop
 while True:
@@ -37,6 +39,13 @@ while True:
 
     # Flip the display to show the new frame
     pygame.display.flip()
+
+    if game.game_state["winner"] is not None:
+        if winner_display_started_at is None:
+            winner_display_started_at = pygame.time.get_ticks()
+        elif pygame.time.get_ticks() - winner_display_started_at >= WIN_DISPLAY_DURATION:
+            pygame.quit()
+            sys.exit()
 
     # Cap the frame rate
     GAME_CLOCK.tick(FPS)

@@ -32,6 +32,7 @@ game_state = {
     "top_card": None, # card on top of the discard pile
 
     "UNO!": False,
+    "uno_player": None,
 
     # LOCAL GAME STATE DATA
 
@@ -172,6 +173,8 @@ def start_CPU_game(): # start a game against CPU players
         "relative": 0
     }
     game_state["top_card"] = None
+    game_state["UNO!"] = False
+    game_state["uno_player"] = None
     game_state["turn_order"] = [0, 1, 2, 3]
 
     game_state["local_player_id"] = 0
