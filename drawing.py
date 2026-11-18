@@ -9,7 +9,9 @@ WIDTH, HEIGHT = 800, 600
 
 SCREEN_BG = (68, 68, 68) # #444
 TEXT_COLOR = (255, 255, 255) # #fff
+
 _wild_result_started_at: int | None = None
+_uno_text_started_at: int | None = None
 
 def load_image(path: str) -> pygame.Surface:
     return pygame.image.load(other.resource_path(path)).convert_alpha()
@@ -167,14 +169,16 @@ def draw_card_picker(screen: pygame.Surface, events: list[pygame.event.Event], c
         button.draw(screen); button.check_click(events)
 
 def draw_UNO_text(screen: pygame.Surface, recipient: game.Player):
-    pygame.time.delay(3000)
+    global _uno_text_started_at
 
-    Textbox(250, 375, f"{recipient.name} UNO!").draw(screen)
+    if _uno_text_started_at is None: _uno_text_started_at = pygame.time.get_ticks()
 
-    pygame.time.delay(3000)
+    Textbox(275, 375, f"{recipient.name} UNO!", font_size = 36).draw(screen)
 
-    game.game_state["UNO!"] = False
-    game.game_state["uno_player"] = None
+    if pygame.time.get_ticks() - _uno_text_started_at >= 3000:
+        game.game_state["UNO!"] = 0
+        game.game_state["UNO_player"] = None
+        _uno_text_started_at = None
 
 def draw_win_text(screen: pygame.Surface, winner: game.Player):
     # a supplement to draw_game_screen that is also there on a win.
