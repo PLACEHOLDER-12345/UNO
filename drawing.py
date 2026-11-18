@@ -81,6 +81,46 @@ class Textbox:
     def draw(self, screen: pygame.Surface):
         screen.blit(self.text_surf, (self.x, self.y))
 
+class TextInput:
+    def __init__(self, x, y, l, w, font_face = "Times New Roman", font_size = 36, max_chars_input = -1):
+        self.font = get_font(font_face, font_size)
+        self.input = ""
+        self.text_surf = render_text(self.input, font_face, font_size)
+        self.x, self.y = x, y
+        self.l, self.w = l, w
+        self.font_face, font_size = font_face, font_size
+        self.max_chars_input = max_chars_input
+        self.active = False
+        self.rect = pygame.Rect(x, y, l, w)
+
+    def draw(self, screen: pygame.Surface):
+        # Draw the input box
+        color = (192, 192, 192) if self.active else (128, 128, 128)
+        pygame.draw.rect(screen, color, self.rect, 2)
+        # Render the text
+        self.text_surf = render_text(self.input, self.font_face, self.font_size)
+        screen.blit(self.text_surf, (self.x + 5, self.y + (self.w - self.text_surf.get_height()) // 2))
+
+    def activate(self, screen: pygame.Surface):
+        # Activate the input box and pause the game for text entry
+        self.active = True
+        clock = pygame.time.Clock()
+        done = False
+        while not done:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT: pygame.quit(); exit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN: done = True
+                    elif event.key == pygame.K_BACKSPACE: self.input = self.input[:-1]
+                    else:
+                        if self.max_chars_input == -1 or len(self.input) < self.max_chars_input:
+                            if event.unicode.isprintable(): self.input += event.unicode
+            # Redraw the input box
+            self.draw(screen)
+            pygame.display.flip()
+            clock.tick(30)
+        self.active = False
+
 def draw_grid(screen: pygame.Surface): # grid to help with positioning elements on the screen
     for x in range(0, WIDTH, 50):
         pygame.draw.line(screen, (50, 50, 50), (x, 0), (x, HEIGHT))

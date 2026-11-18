@@ -3,6 +3,8 @@
 import random
 import socket, threading, json
 
+import game, uno_mechanics
+
 room_list = { # this is local reference
 
 }
@@ -20,6 +22,17 @@ class Room:
         self.clients: list = [host_socket]
 
         self.game_state: dict = None # AUTHORITATIVE
+
+def card_to_JSON(card: uno_mechanics.Card): return {"color": card.color, "value": card.value}
+def JSON_to_card(data):
+    if isinstance(data, uno_mechanics.Card): return data
+    if isinstance(data, str): data = json.loads(data)
+    if isinstance(data, dict):
+        color = data["color"]
+        value = data["value"]
+    else: color, value = data
+
+    return uno_mechanics.Card(color, value)
 
 def generate_room_code() -> str:
     while True:

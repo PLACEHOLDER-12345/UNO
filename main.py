@@ -15,7 +15,7 @@ screen = pygame.display.set_mode((drawing.WIDTH, drawing.HEIGHT))
 pygame.display.set_caption('UNO Game')
 
 # Set up the clock for managing the frame rate
-FPS = 60
+FPS = 30
 GAME_CLOCK = pygame.time.Clock()
 WIN_DISPLAY_DURATION = 3000
 winner_display_started_at = None
