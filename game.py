@@ -32,7 +32,7 @@ game_state = {
     "top_card": None, # card on top of the discard pile
 
     "UNO!": False,
-    "uno_player": None,
+    "UNO_player": None,
 
     # LOCAL GAME STATE DATA
 
@@ -77,7 +77,7 @@ def select_card(player: Player, card: uno_mechanics.Card): # works in tandem wit
     play_card(player.hand, card)
     game_state["player_on_card_picker"] = False
 
-    end_turn()
+    if not game_state["choosing_wild_color"]: end_turn()
 
 def draw_button_handler(player: Player):
     print("Draw card button clicked!")
@@ -143,6 +143,7 @@ def update():
     if not currently_playing: return
     if game_state["winner"] is not None: return
     if game_state["choosing_wild_color"]: return
+    if game_state["UNO!"]: return
 
     current_player: Player = game_state["player_data"][game_state["current_turn"]["absolute"]]
     local_player: Player = game_state["player_data"][game_state["local_player_id"]]

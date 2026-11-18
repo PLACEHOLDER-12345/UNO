@@ -124,6 +124,9 @@ def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], cho
             if event.type == pygame.KEYDOWN and event.key in color_keys:
                 game.game_state["top_card"].color = color_keys[event.key]
                 game.game_state["choosing_wild_color"] = color_keys[event.key] + 2
+
+                game.end_turn()
+
                 _wild_result_started_at = pygame.time.get_ticks()
                 break
     elif choosing_wild_color in {2, 3, 4, 5}:
