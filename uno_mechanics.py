@@ -65,36 +65,33 @@ def draw_card(hand: list[Card]) -> Card:
     hand.append(Card(color, value))
     return hand[-1] # return the card that was drawn
 
-def wild_card(card: Card) -> Card:
-    from game import game_state
+def wild_card(state: dict, card: Card) -> Card:
 
-    current_player = game_state["player_data"][game_state["current_turn"]["absolute"]]
-    game_state["wild_player"] = current_player
+    current_player = state["player_data"][state["current_turn"]["absolute"]]
+    state["wild_player"] = current_player
 
-    if current_player.player_id == game_state["local_player_id"]:
-        game_state["choosing_wild_color"] = 1
+    if current_player.player_id == state["local_player_id"]:
+        state["choosing_wild_color"] = 1
         return card
+    else: card.color = random.choice((0, 1, 2, 3))
 
-    card.color = random.choice((0, 1, 2, 3))
     print(f"The color was: {CARD_COLORS[card.color]}")
-    game_state["choosing_wild_color"] = card.color + 2
+    state["choosing_wild_color"] = card.color + 2
     return card
 
-def play_card(hand: list[Card], card: Card) -> Card:
-
-    from game import game_state
+def play_card(state: dict, hand: list[Card], card: Card) -> Card:
 
     if card not in hand: return None # cannot play a card that is not in your hand
 
     hand.remove(card)
 
-    game_state["top_card"] = card # set the top card to the played card
+    state["top_card"] = card # set the top card to the played card
 
     # action cards affect the player after the current player.
     if card.value in {10, 12, 14}:
-        players = game_state["player_data"]
+        players = state["player_data"]
         if players:
-            current_player = game_state["current_turn"]["absolute"]
+            current_player = state["current_turn"]["absolute"]
             target = players[(current_player + 1) % len(players)]
 
             if hasattr(target, "status"): target.status["skipped"] = True
@@ -109,31 +106,30 @@ def play_card(hand: list[Card], card: Card) -> Card:
                     for _ in range(2 if card.value == 12 else 4):
                         draw_card(target_hand)
 
-                if card.value == 14: wild_card(card)
+                if card.value == 14: wild_card(state, card)
 
     # wild
-    if card.value == 13: wild_card(card)
+    if card.value == 13: wild_card(state, card)
 
     # reverse
     if card.value == 11:
-        current_player = game_state["current_turn"]["absolute"]
+        current_player = state["current_turn"]["absolute"]
         
-        game_state["turn_order"].reverse()
-        game_state["current_turn"] = {
+        state["turn_order"].reverse()
+        state["current_turn"] = {
             "absolute": current_player,
-            "relative": game_state["turn_order"].index(current_player)
+            "relative": state["turn_order"].index(current_player)
         }
 
     # CHECK FOR UNO
-    if len(hand) == 1: UNO()
+    if len(hand) == 1: UNO(state)
 
-    return game_state["top_card"]
+    return state["top_card"]
 
-def UNO(): 
-    from game import game_state
+def UNO(state): 
 
-    game_state["uno_player"] = game_state["player_data"][game_state["current_turn"]["absolute"]]
-    game_state["UNO!"] = True
+    state["uno_player"] = state["player_data"][state["current_turn"]["absolute"]]
+    state["UNO!"] = True
 
 def is_card_playable(card: Card) -> bool:
     from game import game_state

@@ -3,7 +3,7 @@
 import other
 
 import pygame
-import game
+import game, comms
 
 WIDTH, HEIGHT = 800, 600
 
@@ -82,13 +82,14 @@ class Textbox:
         screen.blit(self.text_surf, (self.x, self.y))
 
 class TextInput:
-    def __init__(self, x, y, l, w, font_face = "Times New Roman", font_size = 36, max_chars_input = -1):
+    def __init__(self, x, y, l, w, font_face = "Times New Roman", font_size = 36, max_chars_input = 32):
         self.font = get_font(font_face, font_size)
         self.input = ""
-        self.text_surf = render_text(self.input, font_face, font_size)
         self.x, self.y = x, y
         self.l, self.w = l, w
-        self.font_face, font_size = font_face, font_size
+        self.font_face: int = font_face
+        self.font_size: int = font_size
+        self.text_surf = render_text(self.input, font_face, font_size)
         self.max_chars_input = max_chars_input
         self.active = False
         self.rect = pygame.Rect(x, y, l, w)
@@ -96,29 +97,34 @@ class TextInput:
     def draw(self, screen: pygame.Surface):
         # Draw the input box
         color = (192, 192, 192) if self.active else (128, 128, 128)
+        pygame.draw.rect(screen, SCREEN_BG, self.rect)
         pygame.draw.rect(screen, color, self.rect, 2)
         # Render the text
         self.text_surf = render_text(self.input, self.font_face, self.font_size)
         screen.blit(self.text_surf, (self.x + 5, self.y + (self.w - self.text_surf.get_height()) // 2))
 
     def activate(self, screen: pygame.Surface):
-        # Activate the input box and pause the game for text entry
-        self.active = True
+        '''Accept text until Enter is pressed.'''
         clock = pygame.time.Clock()
         done = False
+        self.active = True
+
         while not done:
             for event in pygame.event.get():
-                if event.type == pygame.QUIT: pygame.quit(); exit()
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN: done = True
                     elif event.key == pygame.K_BACKSPACE: self.input = self.input[:-1]
-                    else:
-                        if self.max_chars_input == -1 or len(self.input) < self.max_chars_input:
-                            if event.unicode.isprintable(): self.input += event.unicode
-            # Redraw the input box
+                    elif (self.max_chars_input == -1 or
+                          len(self.input) < self.max_chars_input):
+                        if event.unicode.isprintable(): self.input += event.unicode
+
             self.draw(screen)
             pygame.display.flip()
             clock.tick(30)
+
         self.active = False
 
 def draw_grid(screen: pygame.Surface): # grid to help with positioning elements on the screen
@@ -127,14 +133,70 @@ def draw_grid(screen: pygame.Surface): # grid to help with positioning elements 
     for y in range(0, HEIGHT, 50):
         pygame.draw.line(screen, (50, 50, 50), (0, y), (WIDTH, y))
 
+def name_entry() -> str:
+    screen = pygame.display.get_surface()
+    player_name = "Player 1"
+
+    screen.fill(SCREEN_BG)
+    Textbox(50, 500, "Enter your name:", font_size=36).draw(screen)
+
+    name_input = TextInput(
+        400, 500, 400, 50,
+        font_face = "Times New Roman",
+        font_size = 36,
+        max_chars_input = 32
+    )
+    name_input.draw(screen)
+    name_input.activate(screen)
+
+    player_name = name_input.input.strip() or "Player 1"
+
+    return player_name
+
 def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.fill(SCREEN_BG)
 
     text_1 = Textbox(125, 50, "Welcome to UNO!", font_size = 72)
 
-    button_1 = Button(200, 200, 400, 75, "CPU Game", onclick = game.start_CPU_game)
-    button_2 = Button(200, 300, 400, 75, "Create Room", onclick = lambda: print("Create Room button clicked!"))
-    button_3 = Button(200, 400, 400, 75, "Join Room", onclick = lambda: print("Join Room button clicked!"))
+    def prompt_entry(screen: pygame.Surface, label: str, y: int,
+                    width: int = 400, max_chars: int = 32) -> str:
+        screen.fill(SCREEN_BG)
+        Textbox(50, y, label, font_size = 36).draw(screen)
+        text_input = TextInput(
+            400, y, width, 50,
+            font_face = "Times New Roman",
+            font_size = 36,
+            max_chars_input = max_chars
+        )
+        text_input.draw(screen)
+        text_input.activate(screen)
+        return text_input.input.strip()
+
+    def CPU_game_handler(): game.start_CPU_game()
+
+    def create_room_handler():
+        print("Create Room button clicked!")
+        comms.create_room(name_entry())
+        game.waiting_for_players = True
+
+    def join_room_handler():
+        print("Join Room button clicked.")
+
+        player_name = name_entry()
+        code = prompt_entry(screen, "Room code:", 300, max_chars = 4).strip().upper()
+
+        if len(code) != 4 or not code.isalpha(): print("Room code must be 4 letters"); return
+
+        try:
+            ip = comms.find_room(code)
+            if ip is None: print("Room not found"); return
+            comms.join_room(ip, code, player_name)
+            game.waiting_for_players = True
+        except (OSError, ConnectionError) as error: print("Could not join room:", error)
+
+    button_1 = Button(200, 200, 400, 75, "CPU Game", onclick = CPU_game_handler)
+    button_2 = Button(200, 300, 400, 75, "Create Room", onclick = create_room_handler)
+    button_3 = Button(200, 400, 400, 75, "Join Room", onclick = join_room_handler)
 
     text_1.draw(screen)
     button_1.draw(screen)
@@ -144,6 +206,35 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     button_1.check_click(events)  
     button_2.check_click(events)  
     button_3.check_click(events)  
+
+def draw_LAN_wait(screen: pygame.Surface, events: list[pygame.event.Event], room: comms.Room):
+    '''Draw the waiting screen in a LAN game.'''
+
+    screen.fill(SCREEN_BG)
+
+    Textbox(250, 40, "Waiting for Players", font_size = 48).draw(screen)
+
+    room_code = room.code if room.code else "----"
+    Textbox(300, 120, f"Room Code: {room_code}", font_size = 28).draw(screen)
+
+    with room.lock: players = list(room.player_names)
+
+    Textbox(225, 180, "Players", font_size = 32).draw(screen)
+
+    for index in range(4):
+        y = 230 + index * 55
+        pygame.draw.rect(screen, (128, 128, 128), (225, y, 350, 45), 2)
+
+        name = players[index]
+        Textbox(
+            240, y + 7, name if name is not None else "Waiting...",
+            font_size = 24
+        ).draw(screen)
+
+    if comms.player_count(room) in {0, 1}:
+        dots = "." * (1 + (pygame.time.get_ticks() // 500) % 3)
+        Textbox(250, 500, f"Searching for players{dots}", font_size = 36).draw(screen)
+    else: Button(225, 500, 200, 75, f"Start!", onclick = game.start_LAN_game)
 
 def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], chooser: game.Player):
     from uno_mechanics import CARD_COLORS
@@ -155,10 +246,8 @@ def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], cho
         Textbox(150, 375, f"""{chooser.name}, pick a color!
     Press R for red, Y for yellow, G for green, B for blue.""", font_size = 18).draw(screen)
         color_keys = {
-            pygame.K_r: 0,
-            pygame.K_y: 1,
-            pygame.K_b: 2,
-            pygame.K_g: 3,
+            pygame.K_r: 0, pygame.K_y: 1,
+            pygame.K_g: 2, pygame.K_b: 3,
         }
         for event in events:
             if event.type == pygame.KEYDOWN and event.key in color_keys:
@@ -262,10 +351,11 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
 
         start_x, start_y, spacing_x, spacing_y, rotation = CARD_LOCATIONS[seat]
 
-        for card_index, card in enumerate(player.hand):
+        for card_index in range(player.card_count):
             # show the viewer's cards
             if card_index < 10:
                 if player_id == viewer_id: 
+                    card = player.hand[card_index]
                     screen.blit(card.get_image(), (
                         start_x + card_index * spacing_x,
                         start_y + card_index * spacing_y
@@ -303,7 +393,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
 
         rotation = seat * 90
 
-        name_text = Textbox(target_x, target_y, f"{player.name} ({len(player.hand)} cards)", font_size = 24)
+        name_text = Textbox(target_x, target_y, f"{player.name} ({player.card_count} cards)", font_size = 24)
         name_text.text_surf = render_text(name_text.text, "Times New Roman", 24, rotation)
         name_text.draw(screen)
 
@@ -334,6 +424,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.game_state["choosing_wild_color"]:
         draw_wild_pick(screen, events, game.game_state["wild_player"])
 
-def draw(screen: pygame.Surface, events: list[pygame.event.Event]):
+def draw(screen: pygame.Surface, events: list[pygame.event.Event], room: comms.Room):
     if game.currently_playing: draw_game_screen(screen, events)
+    elif game.waiting_for_players: draw_LAN_wait(screen, events, room)
     else: draw_main_menu(screen, events)

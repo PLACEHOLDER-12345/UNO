@@ -24,6 +24,8 @@ winner_display_started_at = None
 while True:
     events = pygame.event.get()
 
+    comms.process_server_messages()
+
     # Handle events
     for event in events:
         if event.type == QUIT:
@@ -34,7 +36,7 @@ while True:
     game.update()
 
     # Draw
-    drawing.draw(screen, events)
+    drawing.draw(screen, events, comms.current_room)
     drawing.draw_grid(screen)
 
     # Flip the display to show the new frame

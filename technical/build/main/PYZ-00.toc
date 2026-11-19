@@ -215,6 +215,7 @@
   ('pygame.version',
    'C:\\Users\\pc\\AppData\\Roaming\\Python\\Python314\\site-packages\\pygame\\version.py',
    'PYMODULE'),
+  ('queue', 'C:\\Python314\\Lib\\queue.py', 'PYMODULE'),
   ('quopri', 'C:\\Python314\\Lib\\quopri.py', 'PYMODULE'),
   ('random', 'C:\\Python314\\Lib\\random.py', 'PYMODULE'),
   ('selectors', 'C:\\Python314\\Lib\\selectors.py', 'PYMODULE'),

@@ -2,18 +2,27 @@
 
 import uno_mechanics
 from pygame import time
+import comms
 
 class Player: # a single player object
     def __init__ (self, name: str, player_id: int):
         self.name = name
         self.player_id = player_id
         self.hand = [] # list of Card objects
+        self.remote_hand_count: int | None = None
 
         self.status = {
             "skipped": False
         }
 
-currently_playing = False # whether the game is currently starting
+    @property
+    def card_count(self) -> int:
+        if self.remote_hand_count is not None:
+            return self.remote_hand_count
+        return len(self.hand)
+
+currently_playing: bool = False # whether the game is currently starting
+waiting_for_players: bool = False
 
 game_state = {
     # PUBLIC DATA FOR EVERYONE
@@ -71,10 +80,16 @@ def play_button_handler(player: Player):
 
     # the card picker code will turn it back to False when finished
 
-def select_card(player: Player, card: uno_mechanics.Card): # works in tandem with draw_card_picker()
+def select_card(player: Player, card: uno_mechanics.Card): 
+    '''Select a card from the Card Picker, as implemented in drawing.draw_card_picker()'''
+    if game_state["local_mult"] and not comms.is_host():
+        comms.send_play_card(card.color, card.value, player.player_id)
+        game_state["player_on_card_picker"] = False
+        return
+
     from uno_mechanics import play_card
 
-    play_card(player.hand, card)
+    play_card(game_state, player.hand, card)
     game_state["player_on_card_picker"] = False
 
     if not game_state["choosing_wild_color"]: end_turn()
@@ -84,6 +99,8 @@ def draw_button_handler(player: Player):
 
     if player.player_id != game_state["current_turn"]["absolute"]: 
         print("not ur turn"); return # safeguard
+
+    if game_state["local_mult"] and not comms.is_host(): comms.send_draw_card(); return
 
     uno_mechanics.draw_card(player.hand)
     end_turn()
@@ -124,7 +141,7 @@ def CPU_play(player: Player):
 
         end_turn(); return
 
-    played = uno_mechanics.play_card(player.hand, random.choice(playable_cards))
+    played = uno_mechanics.play_card(game_state, player.hand, random.choice(playable_cards))
 
     print(f"{player.name} played {played} and now has {len(player.hand)} cards.")
 
@@ -132,7 +149,10 @@ def CPU_play(player: Player):
 
     return
 
-def check_for_winner() -> Player | None: # check if any player has won the game
+def check_for_winner() -> Player | None: 
+    '''
+    Check if any player has won the game.
+    '''
     for player in game_state["player_data"]:
         if len(player.hand) == 0:
             game_state["winner"] = player
@@ -140,7 +160,10 @@ def check_for_winner() -> Player | None: # check if any player has won the game
     return None # no winner yet
 
 def update():
+    '''Update game state'''
+
     if not currently_playing: return
+    if game_state["local_mult"]: return
     if game_state["winner"] is not None: return
     if game_state["choosing_wild_color"]: return
     if game_state["UNO!"]: return
@@ -163,10 +186,12 @@ def update():
     game_state["next_CPU_turn_time"] = now + 2000 if current_player == local_player else now
 
 def start_CPU_game(): # start a game against CPU players
+    """Start a game against CPU players."""
+
     print("Starting CPU game.")
 
     global currently_playing
-    currently_playing = True
+    currently_playing = False
 
     # reset game state
 
@@ -178,6 +203,8 @@ def start_CPU_game(): # start a game against CPU players
     game_state["top_card"] = None
     game_state["UNO!"] = False
     game_state["uno_player"] = None
+    game_state["winner"] = None
+    game_state["local_mult"] = False
     game_state["choosing_wild_color"] = 0
     game_state["wild_player"] = None
     game_state["turn_order"] = [0, 1, 2, 3]
@@ -187,12 +214,12 @@ def start_CPU_game(): # start a game against CPU players
     game_state["player_on_card_picker"] = False
 
     # deal cards to players
+    from drawing import name_entry
 
     for i in range(4): # 4 players
-
         # generate a player object with a name and ID
-        # TODO: add a way to input the player's name instead of a default
-        player = Player(f"Player {i + 1}", i)
+        name = name_entry() if i == 0 else f"Player {i + 1}"
+        player = Player(name, i)
         game_state["player_data"].append(player)
 
         for _ in range(7): uno_mechanics.draw_card(player.hand)
@@ -201,3 +228,42 @@ def start_CPU_game(): # start a game against CPU players
         game_state["top_card"] = uno_mechanics.get_random_card(no_wilds = True)
 
     game_state["turn_player"] = game_state["player_data"][0]
+    currently_playing = True
+
+def start_LAN_game(): # START A LAN GAME
+    """Start a LAN game."""
+
+    print("Starting LAN game.")
+
+    room = comms.current_room
+    if room is None or not comms.is_host():
+        raise RuntimeError("Create a LAN room before starting the game")
+
+    global currently_playing
+    currently_playing = True
+
+    game_state["player_data"] = []
+    game_state["current_turn"] = {"absolute": 0, "relative": 0}
+    game_state["top_card"] = None
+    game_state["UNO!"] = False
+    game_state["UNO_player"] = None
+    game_state["winner"] = None
+    game_state["local_mult"] = True
+    game_state["local_player_id"] = 0
+    game_state["turn_order"] = [0, 1, 2, 3]
+    game_state["player_on_card_picker"] = False
+    game_state["card_picker_page"] = False
+    game_state["choosing_wild_color"] = 0
+    game_state["wild_player"] = None
+
+    for i in range(4):
+        player = Player(comms.current_room.player_names[i], i)
+        game_state["player_data"].append(player)
+        for _ in range(7): uno_mechanics.draw_card(player.hand)
+
+    game_state["top_card"] = uno_mechanics.get_random_card(no_wilds=True)
+    game_state["turn_player"] = game_state["player_data"][0]
+
+    room.game_state = game_state
+    comms.broadcast_game_state()
+    comms.broadcast(room, {"type": "START_GAME"})
