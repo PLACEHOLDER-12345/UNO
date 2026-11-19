@@ -250,17 +250,19 @@ def start_LAN_game(): # START A LAN GAME
     game_state["winner"] = None
     game_state["local_mult"] = True
     game_state["local_player_id"] = 0
-    game_state["turn_order"] = [0, 1, 2, 3]
     game_state["player_on_card_picker"] = False
     game_state["card_picker_page"] = False
     game_state["choosing_wild_color"] = 0
     game_state["wild_player"] = None
 
-    for i in range(4):
-        player = Player(comms.current_room.player_names[i], i)
+    for player_id, name in enumerate(comms.current_room.player_names):
+        if name is None: continue
+
+        player = Player(name, player_id)
         game_state["player_data"].append(player)
         for _ in range(7): uno_mechanics.draw_card(player.hand)
 
+    game_state["turn_order"] = [player.player_id for player in game_state["player_data"]]
     game_state["top_card"] = uno_mechanics.get_random_card(no_wilds=True)
     game_state["turn_player"] = game_state["player_data"][0]
 
