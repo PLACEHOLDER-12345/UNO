@@ -5,7 +5,7 @@ import queue
 import random, time
 import socket, threading
 
-import game, uno_mechanics
+import uno_mechanics
 
 room_list = {}
 
@@ -79,9 +79,10 @@ def game_state_to_JSON(state: dict, recipient_player_id: int) -> dict:
     }
 
 def JSON_to_game_state(data: dict) -> dict:
+    from game import Player, game_state
     players = []
     for player_data in data["player_data"]:
-        player = game.Player(player_data["name"], player_data["player_id"])
+        player = Player(player_data["name"], player_data["player_id"])
         if player_data["hand"] is not None:
             player.hand = [JSON_to_card(card) for card in player_data["hand"]]
             player.remote_hand_count = None
@@ -95,7 +96,7 @@ def JSON_to_game_state(data: dict) -> dict:
             return None
         return next(player for player in players if player.player_id == player_id)
 
-    state = dict(game.game_state)
+    state = dict(game_state)
     state.update({
         "local_mult": True,
         "player_data": players,
@@ -161,6 +162,13 @@ def broadcast(room: Room, packet: dict):
         for client in dead_clients:
             if client in room.clients: room.clients[room.clients.index(client)] = None
 
+def broadcast_room_update(room: Room):
+    broadcast(room, {
+        "type": "ROOM_UPDATE",
+        "room_code": room.code,
+        "player_names": room.player_names
+    })
+
 def broadcast_game_state(room: Room | None = None):
     if room is None: room = current_room
     if room is None: raise RuntimeError("Cannot broadcast game state without an active room")
@@ -201,7 +209,7 @@ def create_room(your_name: str):
 
     return room
 
-def find_room(code: str, timeout: float = 3.0):
+def find_room(code: str, timeout: float = 10.0):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -209,7 +217,11 @@ def find_room(code: str, timeout: float = 3.0):
 
     packet = {"type": "ROOM_LOOKUP", "code": code.upper()}
 
+    print("Looking for room.")
+
     sock.sendto(json.dumps(packet).encode(), ("255.255.255.255", DISCOVERY_PORT))
+
+    print("Broadcast sent.")
 
     try:
         data, addr = sock.recvfrom(2048)
@@ -276,6 +288,11 @@ def client_listener(client: socket.socket, room: Room):
                         )
                 if not state["turn_order"]: room.game_state = None
 
+                # remove from Room
+                room.clients[player_id] = None
+                room.player_names[player_id] = None
+
+        broadcast_room_update(room)
         broadcast_game_state(room)
         client.close()
 
@@ -331,17 +348,14 @@ def join_room(ip: str, code: str, your_name: str = "Player"):
         client_socket = None
         raise
 
-    threading.Thread(
-        target = server_listener,
-        args = (client_socket,),
-        daemon = True
-    ).start()
+    threading.Thread(target = server_listener, args = (client_socket,), daemon = True).start()
 
     print(f"Connected to: {ip}")
-
     return client_socket
 
 def discovery_listener(room: Room):
+    print("Discovery listener started.")
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
@@ -349,11 +363,18 @@ def discovery_listener(room: Room):
 
     while True:
         try:
+            print("Waiting for lookup")
             data, addr = sock.recvfrom(2048)
+            print("Recieved lookup!", addr)
+            print(data.decode())
+
             packet = json.loads(data.decode())
+            print(packet)
 
             if packet["type"] != "ROOM_LOOKUP": continue
             if packet["code"] != room.code: continue
+
+            print("sending ROOM_FOUND")
 
             response = {
                 "type": "ROOM_FOUND",
@@ -394,12 +415,14 @@ def accept_connections(server: socket.socket, room: Room):
                         else f"Player {player_id + 1}"
                     )
 
-                send(client, {"type": "JOIN_OK", "player_id": player_id})
+                send(client, {
+                    "type": "JOIN_OK", "player_id": player_id,
+                    "room_code": room.code, "player_names": room.player_names
+                })
                 print(f"{address} joined room {room.code} as player {player_id + 1}")
+                broadcast_room_update()
 
-                threading.Thread(
-                    target=client_listener, args=(client, room), daemon=True
-                ).start()
+                threading.Thread(target=client_listener, args=(client, room), daemon=True).start()
             except (ConnectionError, OSError, ValueError, json.JSONDecodeError) as error:
                 print(f"Rejected connection from {address}: {error}")
                 client.close()
@@ -420,9 +443,13 @@ def handle_client_message(room: Room, client: socket.socket, packet: dict):
             send(client, {"type": "JOIN_ERROR", "reason": "Client is no longer in the room"})
             return
 
-        state = room.game_state if room.game_state is not None else game.game_state
+        from game import game_state
+
+        state = room.game_state if room.game_state is not None else game_state
 
         if msg_type == "PLAY_CARD":
+            from game import end_turn
+
             player_id = room.clients.index(client)
 
             if packet["player_id"] != player_id:
@@ -443,9 +470,11 @@ def handle_client_message(room: Room, client: socket.socket, packet: dict):
             if card is None: send(client, {"type": "JOIN_ERROR", "reason": "Card not in hand"}); return
 
             uno_mechanics.play_card(state, player.hand, card)
-            game.end_turn()
+            end_turn()
 
         elif msg_type == "DRAW_CARD":
+            from game import end_turn
+
             if state["current_turn"]["absolute"] != player_id:
                 send(client, {"type": "JOIN_ERROR", "reason": "Not your turn."})
 
@@ -454,32 +483,44 @@ def handle_client_message(room: Room, client: socket.socket, packet: dict):
             if player is None: send(client, {"type": "JOIN_ERROR", "reason": "Invalid player"}); return
 
             uno_mechanics.draw_card(player.hand)
-            game.end_turn()
+            end_turn()
 
     room.game_state = state
     broadcast_game_state(room)
 
 def handle_server_message(packet: dict):
+    from game import game_state, currently_playing, waiting_for_players, waiting_room
+
     msg_type = packet["type"]
 
     if msg_type == "GAME_STATE":
         state = JSON_to_game_state(packet["game_state"])
-        game.game_state.clear()
-        game.game_state.update(state)
-    elif msg_type == "START_GAME": game.currently_playing = True
+        game_state.clear()
+        game_state.update(state)
+    elif msg_type == "START_GAME": currently_playing = True
     elif msg_type == "DISCONNECT":
         print("Server disconnected.", packet["reason"])
 
-        game.currently_playing = False
-        game.waiting_for_players = False
+        currently_playing = False
+        waiting_for_players = False
 
         global client_socket
         if client_socket is not None:
             client_socket.close()
             client_socket = None
+    elif msg_type == "ROOM_UPDATE":
+        waiting_room["room_code"] = packet["room_code"]
+        waiting_room["player_names"] = packet["player_names"]
+
+        print("room code:", waiting_room["room_code"])
+        print("player names:", waiting_room["player_names"])        
     elif msg_type == "JOIN_OK": 
-        game.game_state["local_player_id"] = packet["player_id"]
+        game_state["local_player_id"] = packet["player_id"]
+        waiting_room["room_code"] = packet["room_code"]
+        waiting_room["player_names"] = packet["player_names"]
         print(f"Assigned player ID {packet["player_id"]}")
+        print(f"Room code: {packet["room_code"]}")
+        print(f"Player names: {packet["player_names"]}")
     elif msg_type == "JOIN_ERROR":
         print("Could not join room:", packet.get("reason", "Unknown error"))
 

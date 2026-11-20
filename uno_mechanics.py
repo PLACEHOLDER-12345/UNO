@@ -121,13 +121,23 @@ def play_card(state: dict, hand: list[Card], card: Card) -> Card:
 
     # reverse
     if card.value == 11:
-        current_player = state["current_turn"]["absolute"]
-        
-        state["turn_order"].reverse()
-        state["current_turn"] = {
-            "absolute": current_player,
-            "relative": state["turn_order"].index(current_player)
-        }
+        if len(state["player_data"]) != 2:
+            current_player = state["current_turn"]["absolute"]
+            
+            state["turn_order"].reverse()
+            state["current_turn"] = {
+                "absolute": current_player,
+                "relative": state["turn_order"].index(current_player)
+            }
+        else:
+            current_player = state["current_turn"]["absolute"]
+
+            state["turn_order"] = [current_player, (current_player + 1 % 2)]
+
+            state["current_turn"] = {
+                "absolute": current_player,
+                "relative": 0
+            }
 
     # CHECK FOR UNO
     if len(hand) == 1: UNO(state)
@@ -140,7 +150,6 @@ def UNO(state):
     state["UNO!"] = True
 
 def is_card_playable(card: Card, top_card: Card) -> bool:
-
     if top_card is None: 
         print("we might have a problem 'ere")
         return False

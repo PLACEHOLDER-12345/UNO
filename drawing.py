@@ -3,7 +3,7 @@
 import other
 
 import pygame
-import game, comms
+import game
 
 WIDTH, HEIGHT = 800, 600
 
@@ -157,6 +157,8 @@ def name_entry() -> str:
     return player_name
 
 def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
+    from comms import create_room, find_room, join_room
+
     screen.fill(SCREEN_BG)
 
     text_1 = Textbox(125, 50, "Welcome to UNO!", font_size = 72)
@@ -179,7 +181,7 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
 
     def create_room_handler():
         print("Create Room button clicked!")
-        comms.create_room(name_entry())
+        create_room(name_entry())
         game.waiting_for_players = True
 
     def join_room_handler():
@@ -191,9 +193,9 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
         if len(code) != 4 or not code.isalpha(): print("Room code must be 4 letters"); return
 
         try:
-            ip = comms.find_room(code)
+            ip = find_room(code)
             if ip is None: print("Room not found"); return
-            comms.join_room(ip, code, player_name)
+            join_room(ip, code, player_name)
             game.waiting_for_players = True
         except (OSError, ConnectionError) as error: print("Could not join room:", error)
 
@@ -210,14 +212,28 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     button_2.check_click(events)  
     button_3.check_click(events)  
 
-def draw_LAN_wait(screen: pygame.Surface, events: list[pygame.event.Event], room: comms.Room):
+def draw_LAN_wait(screen: pygame.Surface, events: list[pygame.event.Event], room):
+    from comms import player_count
+    
     '''Draw the waiting screen in a LAN game.'''
 
     screen.fill(SCREEN_BG)
 
-    Textbox(250, 40, "Waiting for Players", font_size = 48).draw(screen)
+    if room is not None:
+        # FOR THE HOST 
+        room_code = room.code
+        with room.lock: players = list(room.player_names)
+        num_players = player_count(room)
+        Textbox(250, 40, "Waiting for players.").draw(screen)
+    else:
+        # FOR THE CLIENT
+        room_code = game.waiting_room["room_code"] or "----"
+        players = list(game.waiting_room["player_names"])
+        num_players = sum(name is not None for name in players)
+        Textbox(250, 40, "Joined room.").draw(screen)
+        Textbox(250, 120, "Waiting for host.").draw(screen)
 
-    room_code = room.code if room.code else "----"
+    Textbox(250, 40, "Waiting for Players", font_size = 48).draw(screen)
     Textbox(300, 120, f"Room Code: {room_code}", font_size = 28).draw(screen)
 
     with room.lock: players = list(room.player_names)
@@ -234,12 +250,13 @@ def draw_LAN_wait(screen: pygame.Surface, events: list[pygame.event.Event], room
             font_size = 24
         ).draw(screen)
 
-    if comms.player_count(room) in {0, 1}:
-        dots = "." * (1 + (pygame.time.get_ticks() // 500) % 3)
-        Textbox(250, 500, f"Searching for players{dots}", font_size = 36).draw(screen)
-    else: 
-        button = Button(225, 500, 200, 75, f"Start!", onclick = game.start_LAN_game)
-        button.draw(); button.check_click()
+    if room is not None:
+        if num_players in {0, 1}:
+            dots = "." * (1 + (pygame.time.get_ticks() // 500) % 3)
+            Textbox(250, 500, f"Searching for players{dots}", font_size = 36).draw(screen)
+        else: 
+            button = Button(225, 500, 200, 75, f"Start!", onclick = game.start_LAN_game)
+            button.draw(screen); button.check_click(events)
 
 def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], chooser: game.Player):
     from uno_mechanics import CARD_COLORS
@@ -292,7 +309,7 @@ def draw_card_picker(screen: pygame.Surface, events: list[pygame.event.Event], c
 
     pygame.draw.rect(screen, (128, 128, 128), pygame.rect.Rect(100, 100, 600, 450))
 
-    playable_cards = [card for card in card_picker.hand if is_card_playable(card)]
+    playable_cards = [card for card in card_picker.hand if is_card_playable(card, game.game_state["top_card"])]
 
     for i, card in enumerate(playable_cards[start:end]):
         row = i // CARDS_PER_ROW
@@ -426,7 +443,7 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     if game.game_state["choosing_wild_color"]:
         draw_wild_pick(screen, events, game.game_state["wild_player"])
 
-def draw(screen: pygame.Surface, events: list[pygame.event.Event], room: comms.Room):
+def draw(screen: pygame.Surface, events: list[pygame.event.Event], room):
     if game.currently_playing: draw_game_screen(screen, events)
     elif game.waiting_for_players: draw_LAN_wait(screen, events, room)
     else: draw_main_menu(screen, events)

@@ -17,7 +17,7 @@ pygame.display.set_caption('UNO Game')
 # Set up the clock for managing the frame rate
 FPS = 30
 GAME_CLOCK = pygame.time.Clock()
-WIN_DISPLAY_DURATION = 3000
+WIN_DISPLAY_DURATION = 5000
 winner_display_started_at = None
 
 # Main game loop
@@ -38,6 +38,7 @@ while True:
     game.update()
 
     # Draw
+    print(game.waiting_room)
     drawing.draw(screen, events, comms.current_room)
     drawing.draw_grid(screen)
 

@@ -24,6 +24,11 @@ class Player: # a single player object
 currently_playing: bool = False # whether the game is currently starting
 waiting_for_players: bool = False
 
+waiting_room = {
+    "room_code": "",
+    "player_names": [None, None, None, None]
+}
+
 game_state = {
     # PUBLIC DATA FOR EVERYONE
 
@@ -132,7 +137,7 @@ def CPU_play(player: Player):
         end_turn()
         return
 
-    playable_cards = [card for card in player.hand if uno_mechanics.is_card_playable(card)]
+    playable_cards = [card for card in player.hand if uno_mechanics.is_card_playable(card, game_state["top_card"])]
 
     if len(playable_cards) == 0:
         drawn = uno_mechanics.draw_card(player.hand).__repr__()
