@@ -72,7 +72,7 @@ def play_button_handler(player: Player):
     if player.player_id != game_state["current_turn"]["absolute"]: 
         print("not ur turn"); return
 
-    playable_cards = [card for card in player.hand if is_card_playable(card)]
+    playable_cards = [card for card in player.hand if is_card_playable(card, game_state["top_card"])]
 
     if len(playable_cards) != 0: # if any playable cards
         game_state["player_on_card_picker"] = True

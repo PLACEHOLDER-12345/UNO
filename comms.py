@@ -227,12 +227,69 @@ def client_listener(client: socket.socket, room: Room):
     except Exception as e:
         print("Client disconnected;", e)
         with room.lock:
+            player_id = None
+
             if client in room.clients:
                 player_id = room.clients.index(client)
                 room.clients[player_id] = None
                 room.player_names[player_id] = None
 
+            # Remove player from active game if a game is running
+            if room.game_state is not None and player_id is not None:
+                state = room.game_state
+
+                # Remove from player list
+                state["player_data"] = [p for p in state["player_data"] if p.player_id != player_id]
+
+                # Remove from turn order
+                if player_id in state["turn_order"]:
+                    leaving_turn_index = state["turn_order"].index(player_id)
+
+                    state["turn_order"].remove(player_id)
+
+                    if state["turn_order"]:
+
+                        # If the player whose turn it was disconnected,
+                        # advance to whoever now occupies that slot.
+                        if player_id == state["current_turn"]["absolute"]:
+                            if leaving_turn_index >= len(state["turn_order"]):
+                                leaving_turn_index = 0
+
+                            state["current_turn"]["relative"] = leaving_turn_index
+
+                        # If somebody before the current turn left,
+                        # shift the relative index back by one.
+                        elif leaving_turn_index < state["current_turn"]["relative"]:
+                            state["current_turn"]["relative"] -= 1
+
+                        state["current_turn"]["relative"] %= len(state["turn_order"])
+                        state["current_turn"]["absolute"] = (
+                            state["turn_order"][state["current_turn"]["relative"]]
+                        )
+
+                        state["turn_player"] = next(
+                            (
+                                p
+                                for p in state["player_data"]
+                                if p.player_id == state["current_turn"]["absolute"]
+                            ), None,
+                        )
+                if not state["turn_order"]: room.game_state = None
+
+        broadcast_game_state(room)
         client.close()
+
+def close_host():
+    global server_socket, current_room
+
+    if current_room is not None: shutdown_room(current_room)
+
+    if server_socket is not None:
+        try: server_socket.close()
+        except OSError: pass
+
+    server_socket = None
+    current_room = None
 
 def server_listener(client: socket.socket):
     try:
@@ -241,6 +298,22 @@ def server_listener(client: socket.socket):
     except Exception as e:
         print("Lost connection to server", e)
         incoming_messages.put({"type": "DISCONNECT", "reason": str(e)})
+
+def shutdown_room(room: Room, reason: str = "Host disconnected"):
+    try: broadcast(room, {"type": "DISCONNECT", "reason": reason})
+    except Exception: pass
+
+    with room.lock:
+        for client in room.clients:
+            if client is not None:
+                try: client.close()
+                except OSError: pass
+
+        room.clients = [None, None, None, None]
+        room.player_names = [None, None, None, None]
+        room.game_state = None
+
+    room_list.pop(room.code, None)
 
 def join_room(ip: str, code: str, your_name: str = "Player"):
     global client_socket
@@ -294,48 +367,48 @@ def discovery_listener(room: Room):
 
 def accept_connections(server: socket.socket, room: Room):
     while True:
-        client, address = server.accept()
         try:
-            request = recv(client)
-            if request.get("type") != "JOIN" or request.get("code") != room.code:
-                send(client, {"type": "JOIN_ERROR", "reason": "Invalid room code"})
-                client.close()
-                continue
-
-            with room.lock:
-                player_id = next(
-                    (index for index in range(1, len(room.clients))
-                     if room.clients[index] is None),
-                    None
-                )
-                if player_id is None:
-                    send(client, {"type": "JOIN_ERROR", "reason": "Room is full"})
+            client, address = server.accept()
+            try:
+                request = recv(client)
+                if request.get("type") != "JOIN" or request.get("code") != room.code:
+                    send(client, {"type": "JOIN_ERROR", "reason": "Invalid room code"})
                     client.close()
                     continue
-                room.clients[player_id] = client
-                name = request.get("name")
-                room.player_names[player_id] = (
-                    name.strip()[:32]
-                    if isinstance(name, str) and name.strip()
-                    else f"Player {player_id + 1}"
-                )
 
-            send(client, {"type": "JOIN_OK", "player_id": player_id})
-            print(f"{address} joined room {room.code} as player {player_id + 1}")
+                with room.lock:
+                    player_id = next(
+                        (index for index in range(1, len(room.clients))
+                        if room.clients[index] is None),
+                        None
+                    )
+                    if player_id is None:
+                        send(client, {"type": "JOIN_ERROR", "reason": "Room is full"})
+                        client.close()
+                        continue
+                    room.clients[player_id] = client
+                    name = request.get("name")
+                    room.player_names[player_id] = (
+                        name.strip()[:32]
+                        if isinstance(name, str) and name.strip()
+                        else f"Player {player_id + 1}"
+                    )
 
-            threading.Thread(
-                target=client_listener, args=(client, room), daemon=True
-            ).start()
-        except (ConnectionError, OSError, ValueError, json.JSONDecodeError) as error:
-            print(f"Rejected connection from {address}: {error}")
-            client.close()
+                send(client, {"type": "JOIN_OK", "player_id": player_id})
+                print(f"{address} joined room {room.code} as player {player_id + 1}")
 
-def send_play_card(color: int, value: int, player_id: int):
-    send(client_socket, {"type": "PLAY_CARD", "player_id": player_id, "color": color, "value": value})
+                threading.Thread(
+                    target=client_listener, args=(client, room), daemon=True
+                ).start()
+            except (ConnectionError, OSError, ValueError, json.JSONDecodeError) as error:
+                print(f"Rejected connection from {address}: {error}")
+                client.close()
+        except OSError: break
+
+def send_play_card(color: int, value: int):
+    send(client_socket, {"type": "PLAY_CARD", "color": color, "value": value})
 
 def send_draw_card(): send(client_socket, {"type": "DRAW_CARD"})
-
-def send_choose_color(color: int): send(client_socket, {"type": "CHOOSE_COLOR", "color": color})
 
 def handle_client_message(room: Room, client: socket.socket, packet: dict):
     msg_type = packet["type"]
@@ -350,18 +423,18 @@ def handle_client_message(room: Room, client: socket.socket, packet: dict):
         state = room.game_state if room.game_state is not None else game.game_state
 
         if msg_type == "PLAY_CARD":
+            player_id = room.clients.index(client)
+
             if packet["player_id"] != player_id:
                 send(client, {"type": "JOIN_ERROR", "reason": "Invalid player ID"})
                 return
 
-            player = next(
-                (p for p in state["player_data"] if p.player_id == player_id),
-                None,
-            )
+            if state["current_turn"]["absolute"] != player_id:
+                send(client, {"type": "JOIN_ERROR", "reason": "Not your turn."})
 
-            if player is None:
-                send(client, {"type": "JOIN_ERROR", "reason": "Invalid player"})
-                return
+            player = next((p for p in state["player_data"] if p.player_id == player_id), None)
+
+            if player is None: send(client, {"type": "JOIN_ERROR", "reason": "Invalid player"}); return
 
             card: uno_mechanics.Card = next(
                 (c for c in player.hand if c.color == packet["color"] and c.value == packet["value"]), None
@@ -369,18 +442,19 @@ def handle_client_message(room: Room, client: socket.socket, packet: dict):
 
             if card is None: send(client, {"type": "JOIN_ERROR", "reason": "Card not in hand"}); return
 
-            uno_mechanics.play_card(state, player, card)
+            uno_mechanics.play_card(state, player.hand, card)
+            game.end_turn()
 
         elif msg_type == "DRAW_CARD":
-            player = next(
-                (p for p in state["player_data"] if p.player_id == player_id),
-                None,
-            )
-            if player is None:
-                send(client, {"type": "JOIN_ERROR", "reason": "Invalid player"})
-                return
+            if state["current_turn"]["absolute"] != player_id:
+                send(client, {"type": "JOIN_ERROR", "reason": "Not your turn."})
+
+            player = next((p for p in state["player_data"] if p.player_id == player_id), None,)
+
+            if player is None: send(client, {"type": "JOIN_ERROR", "reason": "Invalid player"}); return
 
             uno_mechanics.draw_card(player.hand)
+            game.end_turn()
 
     room.game_state = state
     broadcast_game_state(room)
@@ -393,7 +467,16 @@ def handle_server_message(packet: dict):
         game.game_state.clear()
         game.game_state.update(state)
     elif msg_type == "START_GAME": game.currently_playing = True
-    elif msg_type == "DISCONNECT": print("Server disconnected.", packet.get("reason", ""))
+    elif msg_type == "DISCONNECT":
+        print("Server disconnected.", packet["reason"])
+
+        game.currently_playing = False
+        game.waiting_for_players = False
+
+        global client_socket
+        if client_socket is not None:
+            client_socket.close()
+            client_socket = None
     elif msg_type == "JOIN_OK": 
         game.game_state["local_player_id"] = packet["player_id"]
         print(f"Assigned player ID {packet["player_id"]}")
@@ -406,7 +489,7 @@ def process_server_messages():
         except queue.Empty: return
         handle_server_message(packet)
 
-def is_host() -> bool: return client_socket is not None and server_socket is None
+def is_host() -> bool: return current_room is not None and server_socket is not None
 
 def player_count(room: Room):
     with room.lock: return sum(name is not None for name in room.player_names)

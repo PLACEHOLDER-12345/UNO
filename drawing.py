@@ -105,6 +105,8 @@ class TextInput:
 
     def activate(self, screen: pygame.Surface):
         '''Accept text until Enter is pressed.'''
+        global draw_grid
+
         clock = pygame.time.Clock()
         done = False
         self.active = True
@@ -120,8 +122,9 @@ class TextInput:
                     elif (self.max_chars_input == -1 or
                           len(self.input) < self.max_chars_input):
                         if event.unicode.isprintable(): self.input += event.unicode
-
+            draw_grid(screen)
             self.draw(screen)
+            
             pygame.display.flip()
             clock.tick(30)
 
@@ -234,7 +237,9 @@ def draw_LAN_wait(screen: pygame.Surface, events: list[pygame.event.Event], room
     if comms.player_count(room) in {0, 1}:
         dots = "." * (1 + (pygame.time.get_ticks() // 500) % 3)
         Textbox(250, 500, f"Searching for players{dots}", font_size = 36).draw(screen)
-    else: Button(225, 500, 200, 75, f"Start!", onclick = game.start_LAN_game)
+    else: 
+        button = Button(225, 500, 200, 75, f"Start!", onclick = game.start_LAN_game)
+        button.draw(); button.check_click()
 
 def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], chooser: game.Player):
     from uno_mechanics import CARD_COLORS
@@ -333,12 +338,6 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
 
     # STEP 2: DRAW THE CARDS (up to 10 each)
 
-    CARD_STRS = ["red", "yellow", "green", "blue", "wild"]
-    CARD_VALS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
-                 "skip", "reverse", "draw_two", "wild", "wild_draw_four"]
-
-    # PLAYER'S CARDS (first player in a CPU game is the human, so show cards)
-
     CARD_LOCATIONS = {
         0: (250, 425, 30, 0, 0), # x, y, x spacing, y spacing, rotation
         1: (50, 150, 0, 30, 90),
@@ -398,7 +397,10 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         name_text.draw(screen)
 
     # STEP 6: DRAW THE "PLAY CARD" AND "DRAW CARD" BUTTONS
-    local_player = game.game_state["player_data"][viewer_id]
+    local_player = next(
+        p for p in game.game_state["player_data"]
+        if p.player_id == viewer_id
+    )
     play_button = Button(100, 500, 100, 33, "Play Card", font_size = 18,
                          onclick = lambda: game.play_button_handler(local_player))
     draw_button = Button(100, 450, 100, 33, "Draw Card", font_size = 18,

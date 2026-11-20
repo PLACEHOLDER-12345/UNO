@@ -66,6 +66,8 @@ def draw_card(hand: list[Card]) -> Card:
     return hand[-1] # return the card that was drawn
 
 def wild_card(state: dict, card: Card) -> Card:
+    from game import game_state
+    from comms import broadcast_game_state
 
     current_player = state["player_data"][state["current_turn"]["absolute"]]
     state["wild_player"] = current_player
@@ -77,6 +79,8 @@ def wild_card(state: dict, card: Card) -> Card:
 
     print(f"The color was: {CARD_COLORS[card.color]}")
     state["choosing_wild_color"] = card.color + 2
+
+    if state["local_mult"]: broadcast_game_state()
     return card
 
 def play_card(state: dict, hand: list[Card], card: Card) -> Card:
@@ -89,10 +93,14 @@ def play_card(state: dict, hand: list[Card], card: Card) -> Card:
 
     # action cards affect the player after the current player.
     if card.value in {10, 12, 14}:
-        players = state["player_data"]
+        from game import Player
+        players: list[Player] = state["player_data"]
         if players:
-            current_player = state["current_turn"]["absolute"]
-            target = players[(current_player + 1) % len(players)]
+            current_relative = state["current_turn"]["relative"]
+            target_id = state["turn_order"][
+                (current_relative + 1) % len(state["turn_order"])
+            ]
+            target = next(p for p in players if p.player_id == target_id)
 
             if hasattr(target, "status"): target.status["skipped"] = True
 
@@ -131,14 +139,13 @@ def UNO(state):
     state["uno_player"] = state["player_data"][state["current_turn"]["absolute"]]
     state["UNO!"] = True
 
-def is_card_playable(card: Card) -> bool:
-    from game import game_state
+def is_card_playable(card: Card, top_card: Card) -> bool:
 
-    if game_state["top_card"] is None: 
+    if top_card is None: 
         print("we might have a problem 'ere")
         return False
 
-    if card.color == game_state["top_card"].color or card.color == 4: return True # matching colors or wild 
-    if card.value == game_state["top_card"].value: return True # matching values
+    if card.color == top_card.color or card.color == 4: return True # matching colors or wild 
+    if card.value == top_card.value: return True # matching values
 
     return False

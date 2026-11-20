@@ -29,6 +29,8 @@ while True:
     # Handle events
     for event in events:
         if event.type == QUIT:
+            if comms.is_host(): comms.close_host()
+
             pygame.quit()
             sys.exit()
 
