@@ -3,7 +3,6 @@ import pygame, sys
 import drawing
 import comms
 import game
-import uno_mechanics
 
 from pygame.locals import *
 
@@ -30,7 +29,6 @@ while True:
     for event in events:
         if event.type == QUIT:
             if comms.is_host(): comms.close_host()
-
             pygame.quit()
             sys.exit()
 
@@ -38,19 +36,12 @@ while True:
     game.update()
 
     # Draw
-    print(game.waiting_room)
+    if not comms.is_host(): print(game.waiting_room)
     drawing.draw(screen, events, comms.current_room)
     drawing.draw_grid(screen)
 
     # Flip the display to show the new frame
     pygame.display.flip()
-
-    if game.game_state["winner"] is not None:
-        if winner_display_started_at is None:
-            winner_display_started_at = pygame.time.get_ticks()
-        elif pygame.time.get_ticks() - winner_display_started_at >= WIN_DISPLAY_DURATION:
-            pygame.quit()
-            sys.exit()
 
     # Cap the frame rate
     GAME_CLOCK.tick(FPS)

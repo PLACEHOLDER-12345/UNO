@@ -224,19 +224,14 @@ def draw_LAN_wait(screen: pygame.Surface, events: list[pygame.event.Event], room
         room_code = room.code
         with room.lock: players = list(room.player_names)
         num_players = player_count(room)
-        Textbox(250, 40, "Waiting for players.").draw(screen)
     else:
         # FOR THE CLIENT
         room_code = game.waiting_room["room_code"] or "----"
         players = list(game.waiting_room["player_names"])
         num_players = sum(name is not None for name in players)
-        Textbox(250, 40, "Joined room.").draw(screen)
-        Textbox(250, 120, "Waiting for host.").draw(screen)
 
     Textbox(250, 40, "Waiting for Players", font_size = 48).draw(screen)
     Textbox(300, 120, f"Room Code: {room_code}", font_size = 28).draw(screen)
-
-    with room.lock: players = list(room.player_names)
 
     Textbox(225, 180, "Players", font_size = 32).draw(screen)
 
@@ -265,18 +260,33 @@ def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], cho
     choosing_wild_color = game.game_state["choosing_wild_color"]
 
     if choosing_wild_color == 1:
-        Textbox(150, 375, f"""{chooser.name}, pick a color!
-    Press R for red, Y for yellow, G for green, B for blue.""", font_size = 18).draw(screen)
+        if chooser.player_id != game.game_state["local_player_id"]:
+            Textbox(150, 375, f"{chooser.name} is choosing a color...", font_size = 18).draw(screen)
+            return
+
+        Textbox(
+            150, 375, f"""{chooser.name}, pick a color!
+Press R for red, Y for yellow, G for green, B for blue.""", font_size = 18
+        ).draw(screen)
         color_keys = {
             pygame.K_r: 0, pygame.K_y: 1,
             pygame.K_g: 2, pygame.K_b: 3,
         }
         for event in events:
             if event.type == pygame.KEYDOWN and event.key in color_keys:
-                game.game_state["top_card"].color = color_keys[event.key]
-                game.game_state["choosing_wild_color"] = color_keys[event.key] + 2
+                from comms import is_host, broadcast_game_state, current_room
+                color = color_keys[event.key]
+                if game.game_state["local_mult"] and not is_host():
+                    from comms import send_wild_color
+                    send_wild_color(color)
+                    break
+
+                game.game_state["top_card"].color = color
+                game.game_state["choosing_wild_color"] = color + 2
 
                 game.end_turn()
+
+                if game.game_state["local_mult"] and is_host(): broadcast_game_state(current_room)
 
                 _wild_result_started_at = pygame.time.get_ticks()
                 break
@@ -284,7 +294,7 @@ def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], cho
         if _wild_result_started_at is None:
             _wild_result_started_at = pygame.time.get_ticks()
         Textbox(
-            300, 400, f"The chosen color was... {CARD_COLORS[choosing_wild_color - 2].upper()}!",
+            250, 400, f"The chosen color was... {CARD_COLORS[choosing_wild_color - 2].upper()}!",
             font_size = 24
         ).draw(screen)
 
@@ -292,6 +302,8 @@ def draw_wild_pick(screen: pygame.Surface, events: list[pygame.event.Event], cho
             game.game_state["choosing_wild_color"] = 0
             game.game_state["wild_player"] = None
             _wild_result_started_at = None
+            from comms import broadcast_game_state, current_room, is_host
+            if game.game_state["local_mult"] and is_host(): broadcast_game_state(current_room)
 
 def draw_card_picker(screen: pygame.Surface, events: list[pygame.event.Event], card_picker: game.Player):
     from uno_mechanics import is_card_playable
@@ -334,9 +346,16 @@ def draw_UNO_text(screen: pygame.Surface, recipient: game.Player):
         game.game_state["UNO_player"] = None
         _uno_text_started_at = None
 
-def draw_win_text(screen: pygame.Surface, winner: game.Player):
+def draw_win_text(screen: pygame.Surface, events: list[pygame.event.Event], winner: game.Player):
     # a supplement to draw_game_screen that is also there on a win.
     Textbox(250, 375, f"{winner.name} WINS!").draw(screen)
+
+    if not game.game_state["local_mult"]:
+        play_again = Button(100, 500, 100, 33, "Rematch!", font_size = 18, onclick = lambda: game.start_CPU_game)
+        draw_button = Button(100, 450, 100, 33, "Quit", font_size = 18, onclick = lambda: pygame.quit)
+
+        play_again.draw(screen); play_again.check_click(events)
+        draw_button.draw(screen); draw_button.check_click(events)
 
 def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.fill(SCREEN_BG)
@@ -344,8 +363,12 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     viewer_id = game.game_state["local_player_id"]
     player_count = len(game.game_state["player_data"])
 
+    turn_order: list = game.game_state["turn_order"]
+    viewer_pos = turn_order.index(viewer_id)
+    turn_pos = turn_order.index(game.game_state["current_turn"]["absolute"])
+
     # STEP 1: DRAW THE YOUR TURN ARROW
-    relative_turn = (game.game_state["current_turn"]["absolute"] - viewer_id) % player_count
+    relative_turn = (turn_pos - viewer_pos) % player_count
 
     # a formula to rotate the image to point at the turn of whoever's turn it is.
     your_turn = get_image_by_path("assets\\YOUR_TURN.png", (160, 120), 90 - (relative_turn * 90))
@@ -362,15 +385,16 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         3: (625, 400, 0, -30, -90),
     }
 
-    for player_id, player in enumerate(game.game_state["player_data"]):
-        seat = (player_id - viewer_id) % player_count
+    for player in game.game_state["player_data"]:
+        player_pos = turn_order.index(player.player_id)
+        seat = (player_pos - viewer_pos) % len(turn_order)
 
         start_x, start_y, spacing_x, spacing_y, rotation = CARD_LOCATIONS[seat]
 
         for card_index in range(player.card_count):
             # show the viewer's cards
             if card_index < 10:
-                if player_id == viewer_id: 
+                if player.player_id == viewer_id: 
                     card = player.hand[card_index]
                     screen.blit(card.get_image(), (
                         start_x + card_index * spacing_x,
@@ -396,8 +420,9 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
     screen.blit(draw_pile_image, (500, 250))
 
     # STEP 5: WRITE PLAYER NAMES AND CARD AMOUNTS
-    for player_id, player in enumerate(game.game_state["player_data"]):
-        seat = (player_id - viewer_id) % player_count
+    for player in game.game_state["player_data"]:
+        player_pos = turn_order.index(player.player_id)
+        seat = (player_pos - viewer_pos) % player_count
         
         # draw the name of the player
         target_x, target_y, rotation = 0, 0, 0
@@ -414,26 +439,33 @@ def draw_game_screen(screen: pygame.Surface, events: list[pygame.event.Event]):
         name_text.draw(screen)
 
     # STEP 6: DRAW THE "PLAY CARD" AND "DRAW CARD" BUTTONS
-    local_player = next(
-        p for p in game.game_state["player_data"]
-        if p.player_id == viewer_id
+    local_player: game.Player = next(
+        (p for p in game.game_state["player_data"]
+        if p.player_id == viewer_id),
+        None
     )
+    if local_player is None: Textbox(250, 300, "Disconnected; close the game.").draw(screen)
+
     play_button = Button(100, 500, 100, 33, "Play Card", font_size = 18,
                          onclick = lambda: game.play_button_handler(local_player))
     draw_button = Button(100, 450, 100, 33, "Draw Card", font_size = 18,
                          onclick = lambda: game.draw_button_handler(local_player))
 
-    if game.game_state["current_turn"]["absolute"] == game.game_state["local_player_id"]:
+    if (
+        local_player is not None and
+        game.game_state["current_turn"]["absolute"] == local_player.player_id and
+        not game.game_state["choosing_wild_color"]
+    ):
         play_button.draw(screen)
         draw_button.draw(screen)
         play_button.check_click(events)
         draw_button.check_click(events)
 
     # CHECK FOR UNO!
-    if game.game_state["UNO!"]: draw_UNO_text(screen, game.game_state["uno_player"])
+    if game.game_state["UNO!"]: draw_UNO_text(screen, game.game_state["UNO_player"])
     
     # CHECK FOR WINNER
-    if game.game_state["winner"] is not None: draw_win_text(screen, game.game_state["winner"])
+    if game.game_state["winner"] is not None: draw_win_text(screen, events, game.game_state["winner"])
 
     # CHECK IF ON CARD PICKER
     if game.game_state["player_on_card_picker"] and not game.game_state["choosing_wild_color"]:

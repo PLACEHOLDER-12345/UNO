@@ -20,7 +20,14 @@ DISCOVERY_PORT, DISCOVERY_INTERVAL = 13109, 0.25
 MAX_PACKET_SIZE = 1_048_576
 
 class Room:
-    def __init__(self, host_socket=None, host_name="Host"):
+    '''
+    A room class.
+    
+    :param socket.socket host_socket: The host socket.
+    :param str host_name: The name of the host.
+    '''
+
+    def __init__(self, host_socket: socket.socket = None, host_name = "Host"):
         self.code = generate_room_code()
         self.host = host_socket
         self.clients: list[socket.socket | None] = [None, None, None, None]
@@ -29,6 +36,14 @@ class Room:
         self.lock = threading.RLock()
 
 class DiscoveredRoom:
+    '''
+    Data about a discovered room.
+
+    :param str ip: The IP address of the room.
+    :param str code: The code of the room.
+    :param str host_name: The name of the room host.
+    :param int player_count: Self-explanatory.
+    '''
     def __init__ (self, ip: str, code: str, host_name: str, player_count: int):
         self.ip, self.code = ip, code
         self.host_name = host_name
@@ -38,10 +53,24 @@ class DiscoveredRoom:
 current_room: Room | None = None
 
 def card_to_JSON(card: uno_mechanics.Card | None):
+    '''
+    Convert a card to a JSON.
+
+    :param uno_mechanics.Card card: The card to convert.
+
+    :returns object: A JSON object with attributes "color" and "value".
+    '''
     if card is None: return None
     return {"color": card.color, "value": card.value}
 
-def JSON_to_card(data):
+def JSON_to_card(data: str):
+    '''
+    Converts a JSON card object to a Card object.
+
+    :param str data: The JSON string to convert to a Card object.
+
+    :returns card_obj: The Card object.
+    '''
     if data is None or isinstance(data, uno_mechanics.Card): return data
     if isinstance(data, str): data = json.loads(data)
     if isinstance(data, dict):
@@ -50,7 +79,15 @@ def JSON_to_card(data):
     return uno_mechanics.Card(color, value)
 
 def game_state_to_JSON(state: dict, recipient_player_id: int) -> dict:
-    players = state["player_data"]
+    '''
+    Converts a game_state object to a JSON to be sent. Censors hands of people other than you.
+
+    :param dict state: The game state.
+    :param int recipient_player_id: The player ID of the recipient.
+
+    :returns out: A new dictionary to be converted into a JSON.
+    '''
+    players: list = state["player_data"]
     serialized_players = []
     for player in players:
         is_recipient = player.player_id == recipient_player_id
@@ -62,8 +99,7 @@ def game_state_to_JSON(state: dict, recipient_player_id: int) -> dict:
             "status": dict(player.status),
         })
 
-    def player_id(player):
-        return None if player is None else player.player_id
+    def player_id(player): return None if player is None else player.player_id
 
     return {
         "player_data": serialized_players,
@@ -73,7 +109,7 @@ def game_state_to_JSON(state: dict, recipient_player_id: int) -> dict:
         "turn_order": list(state["turn_order"]),
         "top_card": card_to_JSON(state["top_card"]),
         "UNO!": state["UNO!"],
-        "uno_player": player_id(state["uno_player"]),
+        "UNO_player": player_id(state["UNO_player"]),
         "choosing_wild_color": state["choosing_wild_color"],
         "wild_player": player_id(state["wild_player"]),
     }
@@ -106,7 +142,7 @@ def JSON_to_game_state(data: dict) -> dict:
         "turn_order": list(data["turn_order"]),
         "top_card": JSON_to_card(data["top_card"]),
         "UNO!": data["UNO!"],
-        "uno_player": player_by_id(data["uno_player"]),
+        "UNO_player": player_by_id(data["UNO_player"]),
         "choosing_wild_color": data["choosing_wild_color"],
         "wild_player": player_by_id(data["wild_player"]),
         "player_on_card_picker": False,
@@ -170,6 +206,9 @@ def broadcast_room_update(room: Room):
     })
 
 def broadcast_game_state(room: Room | None = None):
+
+    print("BROADCASTING GAME STATE")
+
     if room is None: room = current_room
     if room is None: raise RuntimeError("Cannot broadcast game state without an active room")
     if room.game_state is None: return
@@ -420,7 +459,7 @@ def accept_connections(server: socket.socket, room: Room):
                     "room_code": room.code, "player_names": room.player_names
                 })
                 print(f"{address} joined room {room.code} as player {player_id + 1}")
-                broadcast_room_update()
+                broadcast_room_update(room)
 
                 threading.Thread(target=client_listener, args=(client, room), daemon=True).start()
             except (ConnectionError, OSError, ValueError, json.JSONDecodeError) as error:
@@ -428,8 +467,11 @@ def accept_connections(server: socket.socket, room: Room):
                 client.close()
         except OSError: break
 
-def send_play_card(color: int, value: int):
-    send(client_socket, {"type": "PLAY_CARD", "color": color, "value": value})
+def send_play_card(color: int, value: int, player_id: int):
+    send(client_socket, {"type": "PLAY_CARD", "color": color, "value": value, "player_id": player_id})
+
+def send_wild_color(color: int):
+    send(client_socket, {"type": "CHOOSE_WILD_COLOR", "color": color})
 
 def send_draw_card(): send(client_socket, {"type": "DRAW_CARD"})
 
@@ -448,9 +490,7 @@ def handle_client_message(room: Room, client: socket.socket, packet: dict):
         state = room.game_state if room.game_state is not None else game_state
 
         if msg_type == "PLAY_CARD":
-            from game import end_turn
-
-            player_id = room.clients.index(client)
+            from game import end_turn, check_for_winner
 
             if packet["player_id"] != player_id:
                 send(client, {"type": "JOIN_ERROR", "reason": "Invalid player ID"})
@@ -458,6 +498,7 @@ def handle_client_message(room: Room, client: socket.socket, packet: dict):
 
             if state["current_turn"]["absolute"] != player_id:
                 send(client, {"type": "JOIN_ERROR", "reason": "Not your turn."})
+                return
 
             player = next((p for p in state["player_data"] if p.player_id == player_id), None)
 
@@ -469,55 +510,92 @@ def handle_client_message(room: Room, client: socket.socket, packet: dict):
 
             if card is None: send(client, {"type": "JOIN_ERROR", "reason": "Card not in hand"}); return
 
-            uno_mechanics.play_card(state, player.hand, card)
-            end_turn()
+            played_card = uno_mechanics.play_card(state, player.hand, card)
+            
+            winner = check_for_winner()
+            if winner is None:
+                if played_card is not None and state["choosing_wild_color"] != 1: end_turn(played_card)
 
-        elif msg_type == "DRAW_CARD":
+            room.game_state = state
+            broadcast_game_state(room)
+            return
+
+        elif msg_type == "CHOOSE_WILD_COLOR":
             from game import end_turn
 
             if state["current_turn"]["absolute"] != player_id:
                 send(client, {"type": "JOIN_ERROR", "reason": "Not your turn."})
+                return
+
+            color = packet.get("color")
+            if (
+                state["choosing_wild_color"] != 1
+                or state["wild_player"] is None
+                or state["wild_player"].player_id != player_id
+                or state["top_card"] is None
+                or type(color) is not int
+                or color not in range(4)
+            ):
+                send(client, {"type": "JOIN_ERROR", "reason": "Invalid wild color choice."})
+                return
+
+            state["top_card"].color = color
+            state["choosing_wild_color"] = color + 2
+            end_turn()
+
+        elif msg_type == "DRAW_CARD":
+            from game import end_turn, check_for_winner
+
+            if state["current_turn"]["absolute"] != player_id:
+                send(client, {"type": "JOIN_ERROR", "reason": "Not your turn."})
+                return
 
             player = next((p for p in state["player_data"] if p.player_id == player_id), None,)
 
             if player is None: send(client, {"type": "JOIN_ERROR", "reason": "Invalid player"}); return
 
             uno_mechanics.draw_card(player.hand)
-            end_turn()
+            winner = check_for_winner()
+            if winner is None: end_turn()
+
+
+            room.game_state = state
+            broadcast_game_state(room)
+            return
 
     room.game_state = state
     broadcast_game_state(room)
 
 def handle_server_message(packet: dict):
-    from game import game_state, currently_playing, waiting_for_players, waiting_room
+    import game
 
     msg_type = packet["type"]
 
     if msg_type == "GAME_STATE":
         state = JSON_to_game_state(packet["game_state"])
-        game_state.clear()
-        game_state.update(state)
-    elif msg_type == "START_GAME": currently_playing = True
+        game.game_state.clear()
+        game.game_state.update(state)
+    elif msg_type == "START_GAME": game.currently_playing = True
     elif msg_type == "DISCONNECT":
         print("Server disconnected.", packet["reason"])
 
-        currently_playing = False
-        waiting_for_players = False
+        game.currently_playing = False
+        game.waiting_for_players = False
 
         global client_socket
         if client_socket is not None:
             client_socket.close()
             client_socket = None
     elif msg_type == "ROOM_UPDATE":
-        waiting_room["room_code"] = packet["room_code"]
-        waiting_room["player_names"] = packet["player_names"]
+        game.waiting_room["room_code"] = packet["room_code"]
+        game.waiting_room["player_names"] = packet["player_names"]
 
-        print("room code:", waiting_room["room_code"])
-        print("player names:", waiting_room["player_names"])        
+        print("room code:", game.waiting_room["room_code"])
+        print("player names:", game.waiting_room["player_names"])        
     elif msg_type == "JOIN_OK": 
-        game_state["local_player_id"] = packet["player_id"]
-        waiting_room["room_code"] = packet["room_code"]
-        waiting_room["player_names"] = packet["player_names"]
+        game.game_state["local_player_id"] = packet["player_id"]
+        game.waiting_room["room_code"] = packet["room_code"]
+        game.waiting_room["player_names"] = packet["player_names"]
         print(f"Assigned player ID {packet["player_id"]}")
         print(f"Room code: {packet["room_code"]}")
         print(f"Player names: {packet["player_names"]}")

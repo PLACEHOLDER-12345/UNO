@@ -61,14 +61,39 @@ game_state = {
     "wild_player": None
 }
 
-def end_turn():
-    game_state["current_turn"]["relative"] = (
-        game_state["current_turn"]["relative"] + 1
-    ) % len(game_state["player_data"])
-    game_state["current_turn"]["absolute"] = game_state["turn_order"][game_state["current_turn"]["relative"]]
+def end_turn(played_card: uno_mechanics.Card | None = None):
+    turn_order = game_state["turn_order"]
+    if played_card is not None and played_card.value == 11 and len(turn_order) == 2:
+        current_player = next(
+            p for p in game_state["player_data"]
+            if p.player_id == game_state["current_turn"]["absolute"]
+        )
+        game_state["turn_player"] = current_player
+        game_state["player_on_card_picker"] = False
+        print(f"next turn: {current_player.name}")
+        return
+
+    relative = game_state["current_turn"]["relative"]
+    next_player = None
+    for _ in turn_order:
+        relative = (relative + 1) % len(turn_order)
+        next_player_id = turn_order[relative]
+        next_player = next(
+            p for p in game_state["player_data"] if p.player_id == next_player_id
+        )
+        if next_player.status.get("skipped", False):
+            next_player.status["skipped"] = False
+            print(f"{next_player.name} was skipped")
+            continue
+        break
+
+    game_state["current_turn"]["relative"] = relative
+    game_state["current_turn"]["absolute"] = turn_order[relative]
+
+    game_state["turn_player"] = next_player
     game_state["player_on_card_picker"] = False
 
-    print(f"next turn: {game_state["player_data"][game_state['current_turn']["absolute"]].name}")
+    print(f"next turn: {next_player.name}")
 
 def play_button_handler(player: Player):
     from uno_mechanics import is_card_playable
@@ -80,6 +105,7 @@ def play_button_handler(player: Player):
     playable_cards = [card for card in player.hand if is_card_playable(card, game_state["top_card"])]
 
     if len(playable_cards) != 0: # if any playable cards
+        game_state["turn_player"] = player
         game_state["player_on_card_picker"] = True
         game_state["card_picker_page"] = 1 # 1-indexed
 
@@ -94,21 +120,26 @@ def select_card(player: Player, card: uno_mechanics.Card):
 
     from uno_mechanics import play_card
 
-    play_card(game_state, player.hand, card)
+    played_card = play_card(game_state, player.hand, card)
     game_state["player_on_card_picker"] = False
 
-    if not game_state["choosing_wild_color"]: end_turn()
+    winner = check_for_winner()
+    if winner is None:
+        if played_card is not None and game_state["choosing_wild_color"] != 1: end_turn(played_card)
+
+    if game_state["local_mult"] and comms.is_host(): comms.broadcast_game_state(comms.current_room)
 
 def draw_button_handler(player: Player):
     print("Draw card button clicked!")
 
-    if player.player_id != game_state["current_turn"]["absolute"]: 
-        print("not ur turn"); return # safeguard
+    if player.player_id != game_state["current_turn"]["absolute"]: print("not ur turn"); return # safeguard
 
     if game_state["local_mult"] and not comms.is_host(): comms.send_draw_card(); return
 
     uno_mechanics.draw_card(player.hand)
     end_turn()
+
+    if game_state["local_mult"] and comms.is_host(): comms.broadcast_game_state(comms.current_room)
 
 def take_turn(player: Player):
     # not this player's turn
@@ -120,6 +151,8 @@ def take_turn(player: Player):
 
         player.status["skipped"] = False
         end_turn()
+
+        if game_state["local_mult"] and comms.is_host(): comms.broadcast_game_state()
         return
 
     # enable turn controls
@@ -150,7 +183,7 @@ def CPU_play(player: Player):
 
     print(f"{player.name} played {played} and now has {len(player.hand)} cards.")
 
-    end_turn()
+    end_turn(played)
 
     return
 
@@ -158,9 +191,13 @@ def check_for_winner() -> Player | None:
     '''
     Check if any player has won the game.
     '''
+    if game_state["local_mult"] and not comms.is_host(): return None
+
     for player in game_state["player_data"]:
-        if len(player.hand) == 0:
+        if player.card_count == 0:
             game_state["winner"] = player
+
+            if comms.is_host() and game_state["local_mult"]: comms.broadcast_game_state(comms.current_room)
             return player # return the winning player
     return None # no winner yet
 
@@ -173,8 +210,14 @@ def update():
     if game_state["choosing_wild_color"]: return
     if game_state["UNO!"]: return
 
-    current_player: Player = game_state["player_data"][game_state["current_turn"]["absolute"]]
-    local_player: Player = game_state["player_data"][game_state["local_player_id"]]
+    current_player: Player = next(
+        p for p in game_state["player_data"]
+        if p.player_id == game_state["current_turn"]["absolute"]
+    )
+    local_player: Player = next(
+        p for p in game_state["player_data"] 
+        if p.player_id == game_state["local_player_id"]
+    )
 
     if current_player == local_player: 
         take_turn(current_player)
@@ -184,9 +227,11 @@ def update():
     now = time.get_ticks()
     if now < game_state["next_CPU_turn_time"]: return
 
-    CPU_play(current_player)
+    if not game_state["local_mult"]: CPU_play(current_player)
 
     check_for_winner()
+
+    if game_state["local_mult"] and comms.is_host(): comms.broadcast_game_state(comms.current_room)
 
     game_state["next_CPU_turn_time"] = now + 2000 if current_player == local_player else now
 

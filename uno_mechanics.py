@@ -66,21 +66,17 @@ def draw_card(hand: list[Card]) -> Card:
     return hand[-1] # return the card that was drawn
 
 def wild_card(state: dict, card: Card) -> Card:
-    from game import game_state
-    from comms import broadcast_game_state
-
-    current_player = state["player_data"][state["current_turn"]["absolute"]]
+    current_player = next(p for p in state["player_data"] if p.player_id == state["current_turn"]["absolute"])
     state["wild_player"] = current_player
 
-    if current_player.player_id == state["local_player_id"]:
+    if state["local_mult"] or current_player.player_id == state["local_player_id"]:
         state["choosing_wild_color"] = 1
         return card
-    else: card.color = random.choice((0, 1, 2, 3))
 
+    card.color = random.choice((0, 1, 2, 3))
     print(f"The color was: {CARD_COLORS[card.color]}")
     state["choosing_wild_color"] = card.color + 2
 
-    if state["local_mult"]: broadcast_game_state()
     return card
 
 def play_card(state: dict, hand: list[Card], card: Card) -> Card:
@@ -111,8 +107,7 @@ def play_card(state: dict, hand: list[Card], card: Card) -> Card:
                 else: target_hand = None
 
                 if target_hand is not None:
-                    for _ in range(2 if card.value == 12 else 4):
-                        draw_card(target_hand)
+                    for _ in range(2 if card.value == 12 else 4): draw_card(target_hand)
 
                 if card.value == 14: wild_card(state, card)
 
@@ -121,22 +116,13 @@ def play_card(state: dict, hand: list[Card], card: Card) -> Card:
 
     # reverse
     if card.value == 11:
-        if len(state["player_data"]) != 2:
+        if len(state["player_data"]) > 2:
             current_player = state["current_turn"]["absolute"]
             
             state["turn_order"].reverse()
             state["current_turn"] = {
                 "absolute": current_player,
                 "relative": state["turn_order"].index(current_player)
-            }
-        else:
-            current_player = state["current_turn"]["absolute"]
-
-            state["turn_order"] = [current_player, (current_player + 1 % 2)]
-
-            state["current_turn"] = {
-                "absolute": current_player,
-                "relative": 0
             }
 
     # CHECK FOR UNO
@@ -145,9 +131,13 @@ def play_card(state: dict, hand: list[Card], card: Card) -> Card:
     return state["top_card"]
 
 def UNO(state): 
-
-    state["uno_player"] = state["player_data"][state["current_turn"]["absolute"]]
+    from comms import is_host, broadcast_game_state, current_room
+    state["UNO_player"] = next(
+        p for p in state["player_data"] if p.player_id == state["current_turn"]["absolute"]
+    )
     state["UNO!"] = True
+
+    if state["local_mult"] and is_host(): broadcast_game_state(current_room)
 
 def is_card_playable(card: Card, top_card: Card) -> bool:
     if top_card is None: 
