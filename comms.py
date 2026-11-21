@@ -34,6 +34,9 @@ class Room:
         self.player_names: list[str | None] = [host_name, None, None, None]
         self.game_state: dict | None = None
         self.lock = threading.RLock()
+        self.discovery_stop = threading.Event()
+        self.discovery_socket: socket.socket | None = None
+        self.discovery_thread: threading.Thread | None = None
 
 class DiscoveredRoom:
     '''
@@ -244,7 +247,10 @@ def create_room(your_name: str):
     print(f"room code: {room.code}")
 
     threading.Thread(target = accept_connections, args = (server_socket, room), daemon = True).start()
-    threading.Thread(target = discovery_listener, args = (room,), daemon = True).start()
+    room.discovery_thread = threading.Thread(
+        target=discovery_listener, args=(room,), daemon=True
+    )
+    room.discovery_thread.start()
 
     return room
 
@@ -252,22 +258,35 @@ def find_room(code: str, timeout: float = 10.0):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    sock.settimeout(timeout)
-
     packet = {"type": "ROOM_LOOKUP", "code": code.upper()}
+    payload = json.dumps(packet).encode("utf-8")
+    deadline = time.monotonic() + max(timeout, 0)
+    next_broadcast = 0.0
 
     print("Looking for room.")
 
-    sock.sendto(json.dumps(packet).encode(), ("255.255.255.255", DISCOVERY_PORT))
-
-    print("Broadcast sent.")
-
     try:
-        data, addr = sock.recvfrom(2048)
-        response = json.loads(data.decode())
+        while time.monotonic() < deadline:
+            now = time.monotonic()
+            if now >= next_broadcast:
+                sock.sendto(payload, ("255.255.255.255", DISCOVERY_PORT))
+                if next_broadcast == 0.0: print("Broadcast sent.")
+                next_broadcast = time.monotonic() + DISCOVERY_INTERVAL
 
-        if response["type"] == "ROOM_FOUND" and response["code"] == code.upper(): return addr[0]
-    except socket.timeout: return None
+            remaining = min(deadline - time.monotonic(), next_broadcast - time.monotonic())
+            sock.settimeout(max(remaining, 0.001))
+            try: data, addr = sock.recvfrom(2048)
+            except socket.timeout: continue
+
+            try: response = json.loads(data.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError): continue
+
+            if (
+                isinstance(response, dict)
+                and response.get("type") == "ROOM_FOUND"
+                and response.get("code") == code.upper()
+            ): return addr[0]
+        return None
     finally: sock.close()
 
 def client_listener(client: socket.socket, room: Room):
@@ -359,6 +378,13 @@ def shutdown_room(room: Room, reason: str = "Host disconnected"):
     try: broadcast(room, {"type": "DISCONNECT", "reason": reason})
     except Exception: pass
 
+    room.discovery_stop.set()
+    if room.discovery_socket is not None:
+        try: room.discovery_socket.close()
+        except OSError: pass
+    if room.discovery_thread is not None and room.discovery_thread is not threading.current_thread():
+        room.discovery_thread.join(timeout=1)
+
     with room.lock:
         for client in room.clients:
             if client is not None:
@@ -396,24 +422,26 @@ def discovery_listener(room: Room):
     print("Discovery listener started.")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    room.discovery_socket = sock
+    try:
+        sock.bind(("", DISCOVERY_PORT))
+        sock.settimeout(DISCOVERY_INTERVAL)
 
-    sock.bind(("", DISCOVERY_PORT))
+        while not room.discovery_stop.is_set():
+            try: data, addr = sock.recvfrom(2048)
+            except socket.timeout: continue
+            except OSError:
+                if room.discovery_stop.is_set(): break
+                raise
 
-    while True:
-        try:
-            print("Waiting for lookup")
-            data, addr = sock.recvfrom(2048)
-            print("Recieved lookup!", addr)
-            print(data.decode())
+            try: packet = json.loads(data.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError): continue
 
-            packet = json.loads(data.decode())
-            print(packet)
-
-            if packet["type"] != "ROOM_LOOKUP": continue
-            if packet["code"] != room.code: continue
-
-            print("sending ROOM_FOUND")
+            if (
+                not isinstance(packet, dict)
+                or packet.get("type") != "ROOM_LOOKUP"
+                or packet.get("code") != room.code
+            ): continue
 
             response = {
                 "type": "ROOM_FOUND",
@@ -423,7 +451,12 @@ def discovery_listener(room: Room):
             }
 
             sock.sendto(json.dumps(response).encode(), addr)
-        except Exception as e: print("Discovery error: ", e)
+    except OSError as error:
+        if not room.discovery_stop.is_set():
+            print("Discovery socket error:", error)
+    finally:
+        sock.close()
+        room.discovery_socket = None
 
 def accept_connections(server: socket.socket, room: Room):
     while True:

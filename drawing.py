@@ -1,5 +1,6 @@
 # This file contains helpers to draw elements on the screen.
 
+import ipaddress
 import other
 
 import pygame
@@ -157,7 +158,7 @@ def name_entry() -> str:
     return player_name
 
 def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
-    from comms import create_room, find_room, join_room
+    from comms import create_room, find_room, get_local_ip, join_room
 
     screen.fill(SCREEN_BG)
 
@@ -182,6 +183,8 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
     def create_room_handler():
         print("Create Room button clicked!")
         create_room(name_entry())
+        try: print(f"Host LAN IP: {get_local_ip()}")
+        except OSError as error: print("Could not determine host LAN IP:", error)
         game.waiting_for_players = True
 
     def join_room_handler():
@@ -194,10 +197,22 @@ def draw_main_menu(screen: pygame.Surface, events: list[pygame.event.Event]):
 
         try:
             ip = find_room(code)
-            if ip is None: print("Room not found"); return
+            if ip is None:
+                print(
+                    "Room not found. Check the room code, ensure both PCs are on the same LAN, "
+                    "and allow the game through the host's Private-network firewall for UDP 13109."
+                )
+                ip = prompt_entry(screen, "Host LAN IPv4 (shown by host):", 300).strip()
+                if not ip: return
+                try: ip = str(ipaddress.IPv4Address(ip))
+                except ipaddress.AddressValueError: print("Host IP must be a valid IPv4 address."); return
             join_room(ip, code, player_name)
             game.waiting_for_players = True
-        except (OSError, ConnectionError) as error: print("Could not join room:", error)
+        except (OSError, ConnectionError) as error:
+            print(
+                f"Could not join room: {error}. Check that the host allows inbound TCP 13108 "
+                "through its Private-network firewall."
+            )
 
     button_1 = Button(200, 200, 400, 75, "CPU Game", onclick = CPU_game_handler)
     button_2 = Button(200, 300, 400, 75, "Create Room", onclick = create_room_handler)
@@ -351,8 +366,8 @@ def draw_win_text(screen: pygame.Surface, events: list[pygame.event.Event], winn
     Textbox(250, 375, f"{winner.name} WINS!").draw(screen)
 
     if not game.game_state["local_mult"]:
-        play_again = Button(100, 500, 100, 33, "Rematch!", font_size = 18, onclick = lambda: game.start_CPU_game)
-        draw_button = Button(100, 450, 100, 33, "Quit", font_size = 18, onclick = lambda: pygame.quit)
+        play_again = Button(100, 500, 100, 33, "Rematch!", font_size = 18, onclick = lambda: game.start_CPU_game())
+        draw_button = Button(100, 450, 100, 33, "Quit", font_size = 18, onclick = lambda: pygame.quit())
 
         play_again.draw(screen); play_again.check_click(events)
         draw_button.draw(screen); draw_button.check_click(events)
